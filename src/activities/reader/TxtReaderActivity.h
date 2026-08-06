@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "CrossPointSettings.h"
+#include "EpubReaderMenuActivity.h"
 #include "activities/Activity.h"
 
 class TxtReaderActivity final : public Activity {
@@ -20,6 +21,9 @@ class TxtReaderActivity final : public Activity {
   int linesPerPage = 0;
   int viewportWidth = 0;
   bool initialized = false;
+  bool pageIndexComplete = false;
+  bool readerMenuLongPressHandled = false;
+  bool pendingScreenshot = false;
 
   // Cached settings for cache validation (different fonts/margins require re-indexing)
   int cachedFontId = 0;
@@ -32,12 +36,18 @@ class TxtReaderActivity final : public Activity {
 
   void renderPage();
   void renderStatusBar() const;
+  void openReaderMenu();
+  void onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action);
 
   void initializeReader();
   bool loadPageAtOffset(size_t offset, std::vector<std::string>& outLines, size_t& nextOffset);
-  void buildPageIndex();
+  void resetPageIndex();
+  bool ensurePageIndexed(int targetPage);
+  void updateEstimatedTotalPages();
   bool loadPageIndexCache();
   void savePageIndexCache() const;
+  bool appendPageIndexCacheOffset(size_t offset) const;
+  bool updatePageIndexCacheState() const;
   void saveProgress() const;
   void loadProgress();
 
@@ -49,4 +59,5 @@ class TxtReaderActivity final : public Activity {
   void loop() override;
   void render(RenderLock&&) override;
   bool isReaderActivity() const override { return true; }
+  bool supportsLandscape() const override { return true; }
 };

@@ -110,6 +110,7 @@ bool isRebootFromPanic() {
 #ifdef ESP_RST_CPU_LOCKUP
          || resetReason == ESP_RST_CPU_LOCKUP
 #endif
+         || resetReason == ESP_RST_INT_WDT || resetReason == ESP_RST_TASK_WDT || resetReason == ESP_RST_WDT
       ;
 }
 

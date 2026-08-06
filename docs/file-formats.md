@@ -2,6 +2,12 @@
 
 ## `book.bin`
 
+### Version 6
+
+Version 6 keeps the same serialized shape as version 5, but invalidates metadata caches after EPUB-internal URI escape
+decoding was added for manifest, guide, cover, TOC, and asset hrefs. Old `book.bin` files must be regenerated so
+percent-encoded paths such as `Chapter%201.xhtml` or `Images/Cover%20Art.jpg` resolve to the actual archive entries.
+
 ### Version 3
 
 ImHex Pattern:
@@ -104,7 +110,11 @@ if (parsedSize != fileSize) {
 
 ## `section.bin`
 
-### Version 8
+### Version 20
+
+Version 20 keeps the same serialized shape as version 19, but invalidates rendered section caches after CJK tokenization
+and spacing changes. Old `section.bin` files must be regenerated so Chinese/Japanese page breaks and word positions are
+rebuilt.
 
 ImHex Pattern:
 
@@ -114,7 +124,7 @@ import std.string;
 import std.core;
 
 // === Configuration ===
-#define EXPECTED_VERSION 8
+#define EXPECTED_VERSION 20
 #define MAX_STRING_LENGTH 65535
 
 // === String Structure ===
@@ -134,14 +144,16 @@ fn format_string(String s) {
 // === Page Structure ===
 
 enum StorageType : u8 {
-    PageLine = 1
+    PageLine = 1,
+    PageImage = 2,
 };
 
 enum WordStyle : u8 {
     REGULAR = 0,
     BOLD = 1,
     ITALIC = 2,
-    BOLD_ITALIC = 3
+    BOLD_ITALIC = 3,
+    UNDERLINE = 4,
 };
 
 enum BlockStyle : u8 {
@@ -156,15 +168,36 @@ struct PageLine {
   s16 yPos;
   u16 wordCount;
   String words[wordCount];
-  u16 wordXPos[wordCount];
+  s16 wordXPos[wordCount];
   WordStyle wordStyle[wordCount];
-  BlockStyle blockStyle;
+  BlockStyle alignment;
+  bool textAlignDefined;
+  s16 marginTop;
+  s16 marginBottom;
+  s16 marginLeft;
+  s16 marginRight;
+  s16 paddingTop;
+  s16 paddingBottom;
+  s16 paddingLeft;
+  s16 paddingRight;
+  s16 textIndent;
+  bool textIndentDefined;
+};
+
+struct PageImage {
+  s16 xPos;
+  s16 yPos;
+  String imagePath;
+  s16 width;
+  s16 height;
 };
 
 struct PageElement {
     u8 pageElementType;
     if (pageElementType == 1) {
         PageLine pageLine [[inline]];
+    } else if (pageElementType == 2) {
+        PageImage pageImage [[inline]];
     } else {
         std::error(std::format("Unknown page element type: {}", pageElementType));
     }
@@ -173,6 +206,14 @@ struct PageElement {
 struct Page {
     u16 elementCount;
     PageElement elements[elementCount] [[inline]];
+    u16 footnoteCount;
+    char footnoteNumber[footnoteCount][24];
+    char footnoteHref[footnoteCount][64];
+};
+
+struct AnchorEntry {
+    String anchor;
+    u16 page;
 };
 
 // === Section Bin Structure ===
@@ -190,10 +231,15 @@ struct SectionBin {
     s32 fontId;
     float lineCompression;
     bool extraParagraphSpacing;
+    u8 paragraphAlignment;
     u16 viewportWidth;
-    u16 vieportHeight;
+    u16 viewportHeight;
+    bool hyphenationEnabled;
+    bool embeddedStyle;
+    u8 imageRendering;
     u16 pageCount;
     u32 lutOffset;
+    u32 anchorMapOffset;
     
     Page page[pageCount];
     
@@ -205,6 +251,9 @@ struct SectionBin {
     
     // Lookup Tables
     u32 lut[pageCount];
+
+    u16 anchorCount;
+    AnchorEntry anchors[anchorCount];
 };
 
 // === File Parsing ===

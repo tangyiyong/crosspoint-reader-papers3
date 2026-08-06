@@ -4,6 +4,7 @@
 #include <HalDisplay.h>
 
 class FontCacheManager;
+class ExternalFont;
 
 #include <cstring>
 #include <map>
@@ -33,12 +34,16 @@ class GfxRenderer {
   RenderMode renderMode;
   Orientation orientation;
   bool fadingFix;
+  bool darkMode = false;
+  bool invertImagesInDarkMode = false;
+  mutable bool skipDarkModeForImages = false;
   mutable bool forceNextFullRefresh = false;     // Consumed by displayBuffer()
   mutable uint16_t rendersSinceFullRefresh = 0;  // Counter for periodic full refresh
   uint16_t periodicFullRefreshInterval = 0;      // 0 = disabled; >0 = auto full refresh every N renders
   uint8_t* frameBuffer = nullptr;
   uint8_t* bwBufferStored = nullptr;  // Single PSRAM allocation for BW buffer backup
   std::map<int, EpdFontFamily> fontMap;
+  int readerFallbackFontId = 0;
 
   // Mutable because drawText() is const but needs to delegate scan-mode
   // recording to the (non-const) FontCacheManager. Same pragmatic compromise
@@ -47,6 +52,13 @@ class GfxRenderer {
 
   void renderChar(const EpdFontFamily& fontFamily, uint32_t cp, int* x, int* y, bool pixelState,
                   EpdFontFamily::Style style) const;
+  static bool isExternalReaderFontId(int fontId);
+  ExternalFont* getActiveExternalReaderFont(int fontId) const;
+  int getFallbackReaderFontId() const;
+  int getExternalTextAdvanceX(int fontId, const char* text) const;
+  void drawExternalText(int fontId, int x, int y, const char* text, bool black) const;
+  void renderExternalGlyph(const uint8_t* bitmap, const ExternalFont& font, const uint32_t cp, int* x, int baselineY,
+                           bool pixelState) const;
   template <Color color>
   void drawPixelDither(int x, int y) const;
   template <Color color>
@@ -79,7 +91,10 @@ class GfxRenderer {
   void insertFont(int fontId, EpdFontFamily font);
   void setFontCacheManager(FontCacheManager* m) { fontCacheManager_ = m; }
   FontCacheManager* getFontCacheManager() const { return fontCacheManager_; }
+  bool isFontCacheScanning() const;
   const std::map<int, EpdFontFamily>& getFontMap() const { return fontMap; }
+  void setReaderFallbackFontId(int fontId) { readerFallbackFontId = fontId; }
+  int getReaderFallbackFontId() const { return readerFallbackFontId; }
 
   // Orientation control (affects logical width/height and coordinate transforms)
   void setOrientation(const Orientation o) { orientation = o; }
@@ -87,6 +102,22 @@ class GfxRenderer {
 
   // Fading fix control
   void setFadingFix(const bool enabled) { fadingFix = enabled; }
+  void setDarkMode(const bool enabled) {
+    if (darkMode != enabled) {
+      darkMode = enabled;
+      forceNextFullRefresh = true;
+    }
+  }
+  bool isDarkMode() const { return darkMode; }
+  void setInvertImagesInDarkMode(const bool enabled) {
+    if (invertImagesInDarkMode != enabled) {
+      invertImagesInDarkMode = enabled;
+      forceNextFullRefresh = true;
+    }
+  }
+  bool shouldInvertImagesInDarkMode() const { return invertImagesInDarkMode; }
+  void beginImageRender() const { skipDarkModeForImages = true; }
+  void endImageRender() const { skipDarkModeForImages = false; }
 
   // Screen ops
   int getScreenWidth() const;

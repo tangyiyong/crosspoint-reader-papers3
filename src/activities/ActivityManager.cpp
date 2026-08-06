@@ -3,16 +3,18 @@
 #include <HalPowerManager.h>
 #if CROSSPOINT_PAPERS3
 #include "components/UITheme.h"
+#include "OrientationHelper.h"
 #endif
 
 #include "boot_sleep/BootActivity.h"
 #include "boot_sleep/SleepActivity.h"
-#include "browser/OpdsBookBrowserActivity.h"
+#include "home/CrashActivity.h"
 #include "home/FileBrowserActivity.h"
 #include "home/HomeActivity.h"
 #include "home/RecentBooksActivity.h"
 #include "network/CrossPointWebServerActivity.h"
 #include "reader/ReaderActivity.h"
+#include "settings/OpdsServerListActivity.h"
 #include "settings/SettingsActivity.h"
 #include "util/FullScreenMessageActivity.h"
 
@@ -92,6 +94,7 @@ void ActivityManager::loop() {
         // Restore footer height for the returning activity (reader = 0, others = buttonHintsHeight)
         currentActivity->mappedInput.setFooterHeight(
             currentActivity->isReaderActivity() ? 0 : UITheme::getInstance().getMetrics().buttonHintsHeight);
+        OrientationHelper::applyOrientation(renderer, mappedInput, currentActivity.get());
 #endif
         // Handle result if necessary
         if (currentActivity->resultHandler) {
@@ -134,6 +137,9 @@ void ActivityManager::loop() {
       currentActivity = std::move(pendingActivity);
 
       lock.unlock();  // onEnter may acquire its own lock
+#if CROSSPOINT_PAPERS3
+      OrientationHelper::applyOrientation(renderer, mappedInput, currentActivity.get());
+#endif
       currentActivity->onEnter();
 
       // onEnter may request another pending action, we will handle it in the next loop iteration
@@ -169,6 +175,9 @@ void ActivityManager::replaceActivity(std::unique_ptr<Activity>&& newActivity) {
   } else {
     // No current activity, safe to launch immediately
     currentActivity = std::move(newActivity);
+#if CROSSPOINT_PAPERS3
+    OrientationHelper::applyOrientation(renderer, mappedInput, currentActivity.get());
+#endif
     currentActivity->onEnter();
   }
 }
@@ -188,7 +197,7 @@ void ActivityManager::goToRecentBooks() {
 }
 
 void ActivityManager::goToBrowser() {
-  replaceActivity(std::make_unique<OpdsBookBrowserActivity>(renderer, mappedInput));
+  replaceActivity(std::make_unique<OpdsServerListActivity>(renderer, mappedInput, true));
 }
 
 void ActivityManager::goToReader(std::string path) {
@@ -205,6 +214,8 @@ void ActivityManager::goToBoot() { replaceActivity(std::make_unique<BootActivity
 void ActivityManager::goToFullScreenMessage(std::string message, EpdFontFamily::Style style) {
   replaceActivity(std::make_unique<FullScreenMessageActivity>(renderer, mappedInput, std::move(message), style));
 }
+
+void ActivityManager::goToCrashReport() { replaceActivity(std::make_unique<CrashActivity>(renderer, mappedInput)); }
 
 void ActivityManager::goHome() { replaceActivity(std::make_unique<HomeActivity>(renderer, mappedInput)); }
 

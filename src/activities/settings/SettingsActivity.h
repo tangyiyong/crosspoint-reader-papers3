@@ -20,7 +20,9 @@ enum class SettingAction {
   Network,
   ClearCache,
   CheckForUpdates,
+  InstallFirmwareFromSd,
   Language,
+  ExternalReaderFont,
 };
 
 struct SettingInfo {

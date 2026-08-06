@@ -86,31 +86,25 @@ constexpr ThemeMetrics values = {.batteryWidth = 15,
                                  .scrollBarWidth = 4,
                                  .scrollBarRightOffset = 5,
                                  .homeTopPadding = 40,
-#if CROSSPOINT_PAPERS3
-                                 .homeCoverHeight = 540,
-                                 .homeCoverTileHeight = 540,
-#else
                                  .homeCoverHeight = 400,
                                  .homeCoverTileHeight = 400,
-#endif
                                  .homeRecentBooksCount = 1,
-#if CROSSPOINT_PAPERS3
-                                 .buttonHintsHeight = 80,
-                                 .sideButtonHintsWidth = 0,
-#else
                                  .buttonHintsHeight = 40,
                                  .sideButtonHintsWidth = 30,
-#endif
                                  .progressBarHeight = 16,
                                  .progressBarMarginTop = 1,
                                  .statusBarHorizontalMargin = 5,
+#if CROSSPOINT_PAPERS3
+                                 .statusBarVerticalMargin = 34,
+#else
                                  .statusBarVerticalMargin = 19,
+#endif
                                  .keyboardKeyWidth = 22,
                                  .keyboardKeyHeight = 30,
                                  .keyboardKeySpacing = 10,
                                  .keyboardBottomAligned = false,
                                  .keyboardCenteredText = false};
-}  // namespace BaseMetrics
+}
 
 class BaseTheme {
  public:
@@ -151,4 +145,10 @@ class BaseTheme {
   virtual void drawHelpText(const GfxRenderer& renderer, Rect rect, const char* label) const;
   virtual void drawTextField(const GfxRenderer& renderer, Rect rect, const int textWidth) const;
   virtual void drawKeyboardKey(const GfxRenderer& renderer, Rect rect, const char* label, const bool isSelected) const;
+  virtual bool showsFileIcons() const { return false; }
+
+  // Shared constants and helpers for battery drawing (used by all themes)
+  static constexpr int batteryPercentSpacing = 4;
+  static void drawBatteryOutline(const GfxRenderer& renderer, int x, int y, int battWidth, int rectHeight);
+  static void drawBatteryLightningBolt(const GfxRenderer& renderer, int boltX, int boltY);
 };

@@ -136,7 +136,7 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
   if (stride <= 0 || blockH <= 0 || validW <= 0) return 1;
 
   const bool useDithering = ctx->config->useDithering;
-  const bool caching = ctx->caching;
+  bool caching = ctx->caching;
   const int32_t fineScaleFP = ctx->fineScaleFP;
   const int32_t invScaleFP = ctx->invScaleFP;
   GfxRenderer& renderer = *ctx->renderer;
@@ -166,6 +166,11 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
   if (dstXEnd > clampXMax) dstXEnd = clampXMax;
 
   if (dstYStart >= dstYEnd || dstXStart >= dstXEnd) return 1;
+
+  if (caching && !ctx->cache.advanceTo(dstYStart)) {
+    caching = false;
+    ctx->caching = false;
+  }
 
   // === 1:1 fast path: no scaling math ===
   if (fineScaleFP == FP_ONE) {
@@ -454,11 +459,13 @@ bool JpegToFramebufferConverter::decodeToFramebuffer(const std::string& imagePat
   jpeg->setPixelType(EIGHT_BIT_GRAYSCALE);
   jpeg->setUserPointer(&ctx);
 
-  // Allocate cache buffer using final output dimensions
+  // Start streaming the pixel cache to disk. The band only needs to hold the
+  // tallest single JPEGDEC callback block after fine scaling.
   ctx.caching = !config.cachePath.empty();
   if (ctx.caching) {
-    if (!ctx.cache.allocate(destWidth, destHeight, config.x, config.y)) {
-      LOG_ERR("JPG", "Failed to allocate cache buffer, continuing without caching");
+    const int maxBlockDstRows = static_cast<int>((static_cast<int64_t>(16) * ctx.fineScaleFP >> FP_SHIFT) + 2);
+    if (!ctx.cache.begin(config.cachePath, destWidth, destHeight, config.x, config.y, maxBlockDstRows)) {
+      LOG_ERR("JPG", "Failed to start cache stream, continuing without caching");
       ctx.caching = false;
     }
   }
@@ -469,6 +476,7 @@ bool JpegToFramebufferConverter::decodeToFramebuffer(const std::string& imagePat
 
   if (rc != 1) {
     LOG_ERR("JPG", "Decode failed (rc=%d, lastError=%d)", rc, jpeg->getLastError());
+    if (ctx.caching) ctx.cache.abort();
     jpeg->close();
     delete jpeg;
     return false;
@@ -478,9 +486,10 @@ bool JpegToFramebufferConverter::decodeToFramebuffer(const std::string& imagePat
   delete jpeg;
   LOG_DBG("JPG", "JPEG decoding complete - render time: %lu ms", decodeTime);
 
-  // Write cache file if caching was enabled
+  // Finalize the streamed cache. A mid-stream write failure clears ctx.caching
+  // and leaves the partial file to be dropped by PixelCache cleanup.
   if (ctx.caching) {
-    ctx.cache.writeToFile(config.cachePath);
+    ctx.cache.finalize();
   }
 
   return true;

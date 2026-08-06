@@ -54,7 +54,11 @@ constexpr ThemeMetrics values = {.batteryWidth = 16,
                                  .progressBarHeight = 16,
                                  .progressBarMarginTop = 1,
                                  .statusBarHorizontalMargin = 5,
+#if CROSSPOINT_PAPERS3
+                                 .statusBarVerticalMargin = 34,
+#else
                                  .statusBarVerticalMargin = 19,
+#endif
                                  .keyboardKeyWidth = 31,
                                  .keyboardKeyHeight = 50,
                                  .keyboardKeySpacing = 0,

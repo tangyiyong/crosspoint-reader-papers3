@@ -57,26 +57,10 @@ void XtcReaderChapterSelectionActivity::onEnter() {
 void XtcReaderChapterSelectionActivity::onExit() { Activity::onExit(); }
 
 void XtcReaderChapterSelectionActivity::loop() {
-  const int pageItems = getPageItems();
   const int totalItems = static_cast<int>(xtc->getChapters().size());
 
 #if CROSSPOINT_PAPERS3
-  if (mappedInput.wasTapped()) {
-    // Tap-to-select: map touch Y to chapter list item, but ignore footer/button-hint taps.
-    const int footerStartY = renderer.getScreenHeight() - UITheme::getInstance().getMetrics().buttonHintsHeight;
-    if (mappedInput.getTouchY() < footerStartY) {
-      constexpr int lineHeight = 75;
-      const int16_t touchY = mappedInput.getTouchY();
-      const int startY = 60;
-      if (touchY >= startY) {
-        const int page = selectorIndex / pageItems;
-        const int tappedRow = (touchY - startY) / lineHeight;
-        const int tappedIndex = page * pageItems + tappedRow;
-        if (tappedIndex >= 0 && tappedIndex < totalItems) {
-          selectorIndex = tappedIndex;
-        }
-      }
-    }
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     const auto& chapters = xtc->getChapters();
     if (!chapters.empty() && selectorIndex >= 0 && selectorIndex < static_cast<int>(chapters.size())) {
       setResult(PageResult{chapters[selectorIndex].startPage});
@@ -101,6 +85,7 @@ void XtcReaderChapterSelectionActivity::loop() {
     return;
   }
 #else
+  const int pageItems = getPageItems();
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     const auto& chapters = xtc->getChapters();
     if (!chapters.empty() && selectorIndex >= 0 && selectorIndex < static_cast<int>(chapters.size())) {

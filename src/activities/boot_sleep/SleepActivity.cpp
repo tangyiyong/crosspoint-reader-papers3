@@ -10,24 +10,60 @@
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "activities/reader/ReaderUtils.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "images/Logo120.h"
 
+namespace {
+
+struct DarkModeScope {
+  GfxRenderer& renderer;
+  bool wasDarkMode;
+
+  explicit DarkModeScope(GfxRenderer& renderer) : renderer(renderer), wasDarkMode(renderer.isDarkMode()) {
+    renderer.setDarkMode(false);
+  }
+
+  ~DarkModeScope() { renderer.setDarkMode(wasDarkMode); }
+};
+
+}  // namespace
+
 void SleepActivity::onEnter() {
   Activity::onEnter();
-  GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
+
+  // Show popup with reader orientation only when going to sleep from reader
+  if (APP_STATE.lastSleepFromReader) {
+    ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
+    GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
+    renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+  } else {
+    GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
+  }
+
+  const DarkModeScope darkModeScope(renderer);
 
   switch (SETTINGS.sleepScreen) {
     case (CrossPointSettings::SLEEP_SCREEN_MODE::BLANK):
-      return renderBlankSleepScreen();
+      renderBlankSleepScreen();
+      break;
     case (CrossPointSettings::SLEEP_SCREEN_MODE::CUSTOM):
-      return renderCustomSleepScreen();
+      renderCustomSleepScreen();
+      break;
     case (CrossPointSettings::SLEEP_SCREEN_MODE::COVER):
+      renderCoverSleepScreen();
+      break;
     case (CrossPointSettings::SLEEP_SCREEN_MODE::COVER_CUSTOM):
-      return renderCoverSleepScreen();
+      if (APP_STATE.lastSleepFromReader) {
+        renderCoverSleepScreen();
+      } else {
+        renderCustomSleepScreen();
+      }
+      break;
     default:
-      return renderDefaultSleepScreen();
+      renderDefaultSleepScreen();
+      break;
   }
 }
 
@@ -38,7 +74,6 @@ void SleepActivity::renderCustomSleepScreen() const {
   if (dir && dir.isDirectory()) {
     sleepDir = "/.sleep";
   } else {
-    if (dir) dir.close();
     dir = Storage.open("/sleep");
     if (dir && dir.isDirectory()) {
       sleepDir = "/sleep";
@@ -51,39 +86,37 @@ void SleepActivity::renderCustomSleepScreen() const {
     // collect all valid BMP files
     for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
       if (file.isDirectory()) {
-        file.close();
         continue;
       }
       file.getName(name, sizeof(name));
       auto filename = std::string(name);
       if (filename[0] == '.') {
-        file.close();
         continue;
       }
 
       if (!FsHelpers::hasBmpExtension(filename)) {
         LOG_DBG("SLP", "Skipping non-.bmp file name: %s", name);
-        file.close();
         continue;
       }
       Bitmap bitmap(file);
       if (bitmap.parseHeaders() != BmpReaderError::Ok) {
         LOG_DBG("SLP", "Skipping invalid BMP file: %s", name);
-        file.close();
         continue;
       }
       files.emplace_back(filename);
-      file.close();
     }
     const auto numFiles = files.size();
     if (numFiles > 0) {
-      // Generate a random number between 1 and numFiles
-      auto randomFileIndex = random(numFiles);
-      // If we picked the same image as last time, reroll
-      while (numFiles > 1 && APP_STATE.lastSleepImage != UINT8_MAX && randomFileIndex == APP_STATE.lastSleepImage) {
-        randomFileIndex = random(numFiles);
+      // Pick a random wallpaper, excluding recently shown ones.
+      // Window: up to SLEEP_RECENT_COUNT entries, capped at numFiles-1.
+      const uint16_t fileCount = static_cast<uint16_t>(std::min(numFiles, static_cast<size_t>(UINT16_MAX)));
+      const uint8_t window =
+          static_cast<uint8_t>(std::min(static_cast<size_t>(APP_STATE.recentSleepFill), numFiles - 1));
+      auto randomFileIndex = static_cast<uint16_t>(random(fileCount));
+      for (uint8_t attempt = 0; attempt < 20 && APP_STATE.isRecentSleep(randomFileIndex, window); attempt++) {
+        randomFileIndex = static_cast<uint16_t>(random(fileCount));
       }
-      APP_STATE.lastSleepImage = randomFileIndex;
+      APP_STATE.pushRecentSleep(randomFileIndex);
       APP_STATE.saveToFile();
       const auto filename = std::string(sleepDir) + "/" + files[randomFileIndex];
       FsFile file;
@@ -93,16 +126,11 @@ void SleepActivity::renderCustomSleepScreen() const {
         Bitmap bitmap(file, true);
         if (bitmap.parseHeaders() == BmpReaderError::Ok) {
           renderBitmapSleepScreen(bitmap);
-          file.close();
-          dir.close();
           return;
         }
-        file.close();
       }
     }
   }
-  if (dir) dir.close();
-
   // Look for sleep.bmp on the root of the sd card to determine if we should
   // render a custom sleep screen instead of the default.
   FsFile file;
@@ -111,10 +139,8 @@ void SleepActivity::renderCustomSleepScreen() const {
     if (bitmap.parseHeaders() == BmpReaderError::Ok) {
       LOG_DBG("SLP", "Loading: /sleep.bmp");
       renderBitmapSleepScreen(bitmap);
-      file.close();
       return;
     }
-    file.close();
   }
 
   renderDefaultSleepScreen();
@@ -192,13 +218,20 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap) const {
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
 
   if (hasGreyscale) {
-    // Re-render with GRAYSCALE_DIRECT to write gray values (0-3) directly
     bitmap.rewindToData();
-    renderer.clearScreen();
-    renderer.setRenderMode(GfxRenderer::GRAYSCALE_DIRECT);
+    renderer.clearScreen(0x00);
+    renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
     renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY);
+    renderer.copyGrayscaleLsbBuffers();
+
+    bitmap.rewindToData();
+    renderer.clearScreen(0x00);
+    renderer.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
+    renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY);
+    renderer.copyGrayscaleMsbBuffers();
+
+    renderer.displayGrayBuffer();
     renderer.setRenderMode(GfxRenderer::BW);
-    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
   }
 }
 
@@ -274,10 +307,8 @@ void SleepActivity::renderCoverSleepScreen() const {
     if (bitmap.parseHeaders() == BmpReaderError::Ok) {
       LOG_DBG("SLP", "Rendering sleep cover: %s", coverBmpPath.c_str());
       renderBitmapSleepScreen(bitmap);
-      file.close();
       return;
     }
-    file.close();
   }
 
   return (this->*renderNoCoverSleepScreen)();

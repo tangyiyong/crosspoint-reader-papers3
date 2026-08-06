@@ -6,6 +6,8 @@
 
 namespace FsHelpers {
 
+std::string decodeUriEscapes(const std::string& path);
+
 std::string normalisePath(const std::string& path);
 
 /**
@@ -54,5 +56,7 @@ inline bool hasTxtExtension(const String& fileName) {
 
 // Check for .md extension (case-insensitive)
 bool hasMarkdownExtension(std::string_view fileName);
+
+std::string extractFolderPath(const std::string& filePath);
 
 }  // namespace FsHelpers

@@ -1,21 +1,32 @@
 #include "SettingsActivity.h"
 
+#include <ExternalFont.h>
+#include <FontManager.h>
 #include <GfxRenderer.h>
 #include <Logging.h>
 
+#include <algorithm>
+#include <cstdio>
+#include <variant>
+
 #include "ButtonRemapActivity.h"
-#include "CalibreSettingsActivity.h"
 #include "ClearCacheActivity.h"
 #include "CrossPointSettings.h"
+#include "FontSelectActivity.h"
 #include "KOReaderSettingsActivity.h"
 #include "LanguageSelectActivity.h"
+#include "LineSpacingSelectionActivity.h"
 #include "MappedInputManager.h"
+#include "OpdsServerListActivity.h"
+#include "OrientationHelper.h"
 #include "OtaUpdateActivity.h"
+#include "SdFirmwareUpdateActivity.h"
 #include "SettingsList.h"
 #include "StatusBarSettingsActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/ExternalFontLabel.h"
 
 const StrId SettingsActivity::categoryNames[categoryCount] = {StrId::STR_CAT_DISPLAY, StrId::STR_CAT_READER,
                                                               StrId::STR_CAT_CONTROLS, StrId::STR_CAT_SYSTEM};
@@ -31,6 +42,9 @@ void SettingsActivity::onEnter() {
 
   for (const auto& setting : getSettingsList()) {
     if (setting.category == StrId::STR_NONE_OPT) continue;
+#if CROSSPOINT_PAPERS3
+    if (setting.nameId == StrId::STR_FONT_FAMILY) continue;
+#endif
     if (setting.category == StrId::STR_CAT_DISPLAY) {
       displaySettings.push_back(setting);
     } else if (setting.category == StrId::STR_CAT_READER) {
@@ -51,7 +65,12 @@ void SettingsActivity::onEnter() {
   systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_BROWSER, SettingAction::OPDSBrowser));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_INSTALL_FIRMWARE_SD, SettingAction::InstallFirmwareFromSd));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_LANGUAGE, SettingAction::Language));
+#if CROSSPOINT_PAPERS3
+  readerSettings.insert(readerSettings.begin(),
+                        SettingInfo::Action(StrId::STR_EXTERNAL_FONT, SettingAction::ExternalReaderFont));
+#endif
   readerSettings.push_back(SettingInfo::Action(StrId::STR_CUSTOMISE_STATUS_BAR, SettingAction::CustomiseStatusBar));
 
   // Reset selection to first category
@@ -76,29 +95,7 @@ void SettingsActivity::loop() {
   bool hasChangedCategory = false;
 
   // Handle actions with early return
-#if CROSSPOINT_PAPERS3
-  if (mappedInput.wasTapped()) {
-    // Tap-to-select: map touch Y to tab bar or settings item
-    {
-      const auto& metrics = UITheme::getInstance().getMetrics();
-      const int16_t touchY = mappedInput.getTouchY();
-      const int tabTop = metrics.topPadding + metrics.headerHeight;
-      const int tabBottom = tabTop + metrics.tabBarHeight;
-      const int listTop = tabBottom + metrics.verticalSpacing;
-      const int rowHeight = metrics.listRowHeight;
-
-      if (touchY >= tabTop && touchY < tabBottom) {
-        selectedSettingIndex = 0;
-      } else if (touchY >= listTop) {
-        int tappedRow = (touchY - listTop) / rowHeight;
-        if (tappedRow >= 0 && tappedRow < settingsCount) {
-          selectedSettingIndex = tappedRow + 1;
-        }
-      }
-    }
-#else
   if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
-#endif
     if (selectedSettingIndex == 0) {
       selectedCategoryIndex = (selectedCategoryIndex < categoryCount - 1) ? (selectedCategoryIndex + 1) : 0;
       hasChangedCategory = true;
@@ -172,6 +169,27 @@ void SettingsActivity::toggleCurrentSetting() {
 
   const auto& setting = (*currentSettings)[selectedSetting];
 
+  if (setting.nameId == StrId::STR_LINE_SPACING) {
+    startActivityForResult(
+        std::make_unique<LineSpacingSelectionActivity>(renderer, mappedInput, static_cast<int>(SETTINGS.lineSpacing)),
+        [this](const ActivityResult& result) {
+          if (result.isCancelled || !std::holds_alternative<PercentResult>(result.data)) {
+            return;
+          }
+          const int selected = std::get<PercentResult>(result.data).percent;
+          const uint8_t newValue =
+              static_cast<uint8_t>(std::clamp(selected, static_cast<int>(CrossPointSettings::LINE_SPACING_MIN),
+                                              static_cast<int>(CrossPointSettings::LINE_SPACING_MAX)));
+          if (newValue == SETTINGS.lineSpacing) {
+            return;
+          }
+          SETTINGS.lineSpacing = newValue;
+          SETTINGS.saveToFile();
+          requestUpdate();
+        });
+    return;
+  }
+
   if (setting.type == SettingType::TOGGLE && setting.valuePtr != nullptr) {
     // Toggle the boolean value using the member pointer
     const bool currentValue = SETTINGS.*(setting.valuePtr);
@@ -208,7 +226,7 @@ void SettingsActivity::toggleCurrentSetting() {
         startActivityForResult(std::make_unique<KOReaderSettingsActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::OPDSBrowser:
-        startActivityForResult(std::make_unique<CalibreSettingsActivity>(renderer, mappedInput), resultHandler);
+        startActivityForResult(std::make_unique<OpdsServerListActivity>(renderer, mappedInput, false), resultHandler);
         break;
       case SettingAction::Network:
         startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput, false), resultHandler);
@@ -219,8 +237,14 @@ void SettingsActivity::toggleCurrentSetting() {
       case SettingAction::CheckForUpdates:
         startActivityForResult(std::make_unique<OtaUpdateActivity>(renderer, mappedInput), resultHandler);
         break;
+      case SettingAction::InstallFirmwareFromSd:
+        startActivityForResult(std::make_unique<SdFirmwareUpdateActivity>(renderer, mappedInput), resultHandler);
+        break;
       case SettingAction::Language:
         startActivityForResult(std::make_unique<LanguageSelectActivity>(renderer, mappedInput), resultHandler);
+        break;
+      case SettingAction::ExternalReaderFont:
+        startActivityForResult(std::make_unique<FontSelectActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::None:
         // Do nothing
@@ -229,6 +253,16 @@ void SettingsActivity::toggleCurrentSetting() {
     return;  // Results will be handled in the result handler, so we can return early here
   } else {
     return;
+  }
+
+  if (setting.nameId == StrId::STR_COLOR_MODE) {
+    renderer.setDarkMode(SETTINGS.colorMode == CrossPointSettings::COLOR_MODE::DARK_MODE);
+  } else if (setting.nameId == StrId::STR_UI_ORIENTATION) {
+#if CROSSPOINT_PAPERS3
+    OrientationHelper::applyOrientation(renderer, mappedInput, this);
+#endif
+  } else if (setting.nameId == StrId::STR_INVERT_IMAGES) {
+    renderer.setInvertImagesInDarkMode(SETTINGS.invertImages);
   }
 
   SETTINGS.saveToFile();
@@ -276,7 +310,23 @@ void SettingsActivity::render(RenderLock&&) {
 #endif
           valueText = I18N.get(setting.enumValues[value]);
         } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
-          valueText = std::to_string(SETTINGS.*(setting.valuePtr));
+          if (setting.nameId == StrId::STR_LINE_SPACING) {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%.2fx", static_cast<float>(SETTINGS.*(setting.valuePtr)) / 100.0f);
+            valueText = buf;
+          } else {
+            valueText = std::to_string(SETTINGS.*(setting.valuePtr));
+          }
+        } else if (setting.type == SettingType::ACTION && setting.nameId == StrId::STR_EXTERNAL_FONT) {
+          const int selectedExternal = FontMgr.getSelectedIndex();
+          if (selectedExternal >= 0) {
+            const FontInfo* info = FontMgr.getFontInfo(selectedExternal);
+            valueText = info ? buildExternalFontLabel(info->filename, info->name, info->size,
+                                                      ExternalFont::canFitGlyph(info->width, info->height))
+                             : tr(STR_EXTERNAL_FONT);
+          } else {
+            valueText = tr(STR_BUILTIN_FONT);
+          }
         }
         return valueText;
       },

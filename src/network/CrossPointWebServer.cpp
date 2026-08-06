@@ -11,6 +11,7 @@
 #include <algorithm>
 
 #include "CrossPointSettings.h"
+#include "OpdsServerStore.h"
 #include "SettingsList.h"
 #include "WebDAVHandler.h"
 #include "html/FilesPageHtml.generated.h"
@@ -156,6 +157,11 @@ void CrossPointWebServer::begin() {
   server->on("/api/settings", HTTP_GET, [this] { handleGetSettings(); });
   server->on("/api/settings", HTTP_POST, [this] { handlePostSettings(); });
 
+  // OPDS multi-server endpoints
+  server->on("/api/opds", HTTP_GET, [this] { handleGetOpdsServers(); });
+  server->on("/api/opds", HTTP_POST, [this] { handlePostOpdsServer(); });
+  server->on("/api/opds/delete", HTTP_POST, [this] { handleDeleteOpdsServer(); });
+
   server->onNotFound([this] { handleNotFound(); });
   LOG_DBG("WEB", "[MEM] Free heap after route setup: %d bytes", ESP.getFreeHeap());
 
@@ -201,6 +207,7 @@ void CrossPointWebServer::stop() {
 
   // Close any in-progress WebSocket upload
   if (wsUploadInProgress && wsUploadFile) {
+    // Explicit close() required: file-scope global persists beyond function scope
     wsUploadFile.close();
     wsUploadInProgress = false;
   }
@@ -916,16 +923,30 @@ void CrossPointWebServer::handleMove() const {
 }
 
 void CrossPointWebServer::handleDelete() const {
-  // Check if 'paths' argument is provided
-  if (!server->hasArg("paths")) {
-    server->send(400, "text/plain", "Missing paths");
+  // To ensure backwards compatibility, plain `path` is mapped
+  // to a single element JSON array.
+  const bool hasPathArg = server->hasArg("path");
+  const bool hasPathsArg = server->hasArg("paths");
+  if (!(hasPathArg || hasPathsArg)) {
+    server->send(400, "text/plain", "Missing `path` or `paths` argument");
+    return;
+  }
+  if (hasPathArg && hasPathsArg) {
+    server->send(400, "text/plain", "Provide either 'path' or 'paths', not both");
     return;
   }
 
   // Parse paths
-  String pathsArg = server->arg("paths");
+  String pathsArg;
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, pathsArg);
+  DeserializationError error = DeserializationError(DeserializationError::Code::Ok);
+  if (hasPathsArg) {
+    pathsArg = server->arg("paths");
+    error = deserializeJson(doc, pathsArg);
+  } else {
+    pathsArg = server->arg("path");
+    doc.add(pathsArg);
+  }
   if (error) {
     server->send(400, "text/plain", "Invalid paths format");
     return;
@@ -1185,6 +1206,132 @@ void CrossPointWebServer::handlePostSettings() {
   server->send(200, "text/plain", String("Applied ") + String(applied) + " setting(s)");
 }
 
+void CrossPointWebServer::handleGetOpdsServers() const {
+  const auto& servers = OPDS_STORE.getServers();
+
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, "application/json", "");
+  server->sendContent("[");
+
+  static char output[512];
+  constexpr size_t outputSize = sizeof(output);
+  bool seenFirst = false;
+  JsonDocument doc;
+
+  for (size_t i = 0; i < servers.size(); i++) {
+    doc.clear();
+    doc["index"] = i;
+    doc["name"] = servers[i].name;
+    doc["url"] = servers[i].url;
+    doc["username"] = servers[i].username;
+    doc["hasPassword"] = !servers[i].password.empty();
+
+    const size_t written = serializeJson(doc, output, outputSize);
+    if (written >= outputSize) {
+      LOG_DBG("WEB", "Skipping oversized OPDS server JSON at index %zu", i);
+      continue;
+    }
+
+    if (seenFirst) {
+      server->sendContent(",");
+    } else {
+      seenFirst = true;
+    }
+    server->sendContent(output);
+  }
+
+  server->sendContent("]");
+  server->sendContent("");
+  LOG_DBG("WEB", "Served OPDS servers API (%zu servers)", servers.size());
+}
+
+void CrossPointWebServer::handlePostOpdsServer() {
+  if (!server->hasArg("plain")) {
+    server->send(400, "text/plain", "Missing JSON body");
+    return;
+  }
+
+  const String body = server->arg("plain");
+  JsonDocument doc;
+  const DeserializationError err = deserializeJson(doc, body);
+  if (err) {
+    server->send(400, "text/plain", String("Invalid JSON: ") + err.c_str());
+    return;
+  }
+
+  OpdsServer opdsServer;
+  opdsServer.name = doc["name"] | std::string("");
+  opdsServer.url = doc["url"] | std::string("");
+  opdsServer.username = doc["username"] | std::string("");
+
+  const bool hasPasswordField = !doc["password"].isNull();
+  std::string password = doc["password"] | std::string("");
+
+  if (doc["index"].is<int>()) {
+    const int idx = doc["index"].as<int>();
+    if (idx < 0 || idx >= static_cast<int>(OPDS_STORE.getCount())) {
+      server->send(400, "text/plain", "Invalid server index");
+      return;
+    }
+
+    if (!hasPasswordField) {
+      const auto* existing = OPDS_STORE.getServer(static_cast<size_t>(idx));
+      if (existing) {
+        password = existing->password;
+      }
+    }
+    opdsServer.password = password;
+    if (!OPDS_STORE.updateServer(static_cast<size_t>(idx), opdsServer)) {
+      server->send(500, "text/plain", "Failed to update server");
+      return;
+    }
+    LOG_DBG("WEB", "Updated OPDS server at index %d", idx);
+  } else {
+    opdsServer.password = password;
+    if (!OPDS_STORE.addServer(opdsServer)) {
+      server->send(400, "text/plain", "Cannot add server (limit reached)");
+      return;
+    }
+    LOG_DBG("WEB", "Added OPDS server: %s", opdsServer.name.c_str());
+  }
+
+  server->send(200, "text/plain", "OK");
+}
+
+void CrossPointWebServer::handleDeleteOpdsServer() {
+  if (!server->hasArg("plain")) {
+    server->send(400, "text/plain", "Missing JSON body");
+    return;
+  }
+
+  const String body = server->arg("plain");
+  JsonDocument doc;
+  const DeserializationError err = deserializeJson(doc, body);
+  if (err) {
+    server->send(400, "text/plain", String("Invalid JSON: ") + err.c_str());
+    return;
+  }
+
+  if (!doc["index"].is<int>()) {
+    server->send(400, "text/plain", "Missing index");
+    return;
+  }
+
+  const int idx = doc["index"].as<int>();
+  if (idx < 0 || idx >= static_cast<int>(OPDS_STORE.getCount())) {
+    server->send(400, "text/plain", "Invalid server index");
+    return;
+  }
+
+  if (!OPDS_STORE.removeServer(static_cast<size_t>(idx))) {
+    server->send(500, "text/plain", "Failed to delete server");
+    return;
+  }
+
+  LOG_DBG("WEB", "Deleted OPDS server at index %d", idx);
+  server->send(200, "text/plain", "OK");
+}
+
 // WebSocket callback trampoline
 void CrossPointWebServer::wsEventCallback(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
   if (wsInstance) {
@@ -1204,6 +1351,7 @@ void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* 
       LOG_DBG("WS", "Client %u disconnected", num);
       // Clean up any in-progress upload
       if (wsUploadInProgress && wsUploadFile) {
+        // Explicit close() required: file-scope global persists beyond function scope
         wsUploadFile.close();
         // Delete incomplete file
         String filePath = wsUploadPath;
@@ -1287,6 +1435,7 @@ void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* 
       esp_task_wdt_reset();
 
       if (written != length) {
+        // Explicit close() required: file-scope global persists beyond function scope
         wsUploadFile.close();
         wsUploadInProgress = false;
         wsServer->sendTXT(num, "ERROR:Write failed - disk full?");
@@ -1305,6 +1454,7 @@ void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* 
 
       // Check if upload complete
       if (wsUploadReceived >= wsUploadSize) {
+        // Explicit close() required: file-scope global persists beyond function scope
         wsUploadFile.close();
         wsUploadInProgress = false;
 

@@ -15,9 +15,9 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
+#include "ReaderUtils.h"
 #include "RecentBooksStore.h"
 #include "XtcReaderChapterSelectionActivity.h"
-#include "ReaderUtils.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -72,17 +72,13 @@ void XtcReaderActivity::loop() {
   }
 #endif
 
-  // Enter chapter selection activity
-  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    if (xtc && xtc->hasChapters() && !xtc->getChapters().empty()) {
-      startActivityForResult(
-          std::make_unique<XtcReaderChapterSelectionActivity>(renderer, mappedInput, xtc, currentPage),
-          [this](const ActivityResult& result) {
-            if (!result.isCancelled) {
-              currentPage = std::get<PageResult>(result.data).page;
-            }
-          });
-    }
+  const bool menuPressActive = mappedInput.isPressed(MappedInputManager::Button::Confirm);
+  if (!menuPressActive) {
+    chapterMenuLongPressHandled = false;
+  } else if (!chapterMenuLongPressHandled && mappedInput.getHeldTime() >= ReaderUtils::READER_MENU_LONG_PRESS_MS) {
+    chapterMenuLongPressHandled = true;
+    openChapterSelection();
+    return;
   }
 
   // Long press BACK (1s+) goes to file selection
@@ -115,10 +111,14 @@ void XtcReaderActivity::loop() {
     return;
   }
 
-  // Handle end of book
+  // At end of the book, forward button goes home and back button returns to last page
   if (currentPage >= xtc->getPageCount()) {
-    currentPage = xtc->getPageCount() - 1;
-    requestUpdate();
+    if (nextTriggered) {
+      onGoHome();
+    } else {
+      currentPage = xtc->getPageCount() - 1;
+      requestUpdate();
+    }
     return;
   }
 
@@ -139,6 +139,19 @@ void XtcReaderActivity::loop() {
     }
     requestUpdate();
   }
+}
+
+void XtcReaderActivity::openChapterSelection() {
+  if (!xtc || !xtc->hasChapters() || xtc->getChapters().empty()) {
+    return;
+  }
+
+  startActivityForResult(std::make_unique<XtcReaderChapterSelectionActivity>(renderer, mappedInput, xtc, currentPage),
+                         [this](const ActivityResult& result) {
+                           if (!result.isCancelled) {
+                             currentPage = std::get<PageResult>(result.data).page;
+                           }
+                         });
 }
 
 void XtcReaderActivity::render(RenderLock&&) {

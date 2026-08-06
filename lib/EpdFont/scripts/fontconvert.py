@@ -18,6 +18,8 @@ parser.add_argument("--2bit", dest="is2Bit", action="store_true", help="generate
 parser.add_argument("--additional-intervals", dest="additional_intervals", action="append", help="Additional code point intervals to export as min,max. This argument can be repeated.")
 parser.add_argument("--compress", dest="compress", action="store_true", help="Compress glyph bitmaps using DEFLATE with group-based compression.")
 parser.add_argument("--force-autohint", dest="force_autohint", action="store_true", help="Force FreeType auto-hinter instead of native font hinting. Improves stem width consistency for fonts with weak or no native TrueType hints.")
+parser.add_argument("--no-kerning", dest="no_kerning", action="store_true", help="Skip kerning table extraction. Useful for large CJK fallback fonts.")
+parser.add_argument("--no-ligatures", dest="no_ligatures", action="store_true", help="Skip ligature table extraction. Useful for large fallback fonts.")
 args = parser.parse_args()
 
 GlyphProps = namedtuple("GlyphProps", ["width", "height", "advance_x", "left", "top", "data_length", "data_offset", "code_point"])
@@ -319,31 +321,15 @@ for index, glyph in enumerate(all_glyphs):
     glyph_data.extend([b for b in packed])
     glyph_props.append(props)
 
+COMBINING_MARKS_START = 0x0300
+COMBINING_MARKS_END = 0x036F
+all_codepoints = [g.code_point for g in glyph_props]
+
 # --- Kerning pair extraction ---
 # Modern fonts store kerning in the OpenType GPOS table, which FreeType's
 # get_kerning() does not read. We use fonttools to parse both the legacy
 # kern table and the GPOS 'kern' feature (PairPos lookups, including
 # Extension wrappers).
-
-COMBINING_MARKS_START = 0x0300
-COMBINING_MARKS_END = 0x036F
-all_codepoints = [g.code_point for g in glyph_props]
-kernable_codepoints = set(cp for cp in all_codepoints
-                          if not (COMBINING_MARKS_START <= cp <= COMBINING_MARKS_END))
-
-# Map each kernable codepoint to the font-stack index that serves it
-# (same priority logic as load_glyph).
-cp_to_face_idx = {}
-for cp in kernable_codepoints:
-    for face_idx, f in enumerate(font_stack):
-        if f.get_char_index(cp) > 0:
-            cp_to_face_idx[cp] = face_idx
-            break
-
-# Group codepoints by face index
-face_idx_cps = {}
-for cp, fi in cp_to_face_idx.items():
-    face_idx_cps.setdefault(fi, set()).add(cp)
 
 def _extract_pairpos_subtable(subtable, glyph_to_cp, raw_kern):
     """Extract kerning from a PairPos subtable (Format 1 or 2)."""
@@ -446,17 +432,37 @@ def extract_kerning_fonttools(font_path, codepoints, ppem):
             result[(lcp, rcp)] = adjust
     return result
 
-# The ppem used by the existing glyph rasterization:
-#   face.set_char_size(size << 6, size << 6, 150, 150)
-# means size_pt at 150 DPI -> ppem = size * 150 / 72
-ppem = size * 150.0 / 72.0
-
 kern_map = {}  # (leftCp, rightCp) -> adjust
-for face_idx, cps in face_idx_cps.items():
-    font_path = args.fontstack[face_idx]
-    kern_map.update(extract_kerning_fonttools(font_path, cps, ppem))
+if args.no_kerning:
+    print("kerning: skipped", file=sys.stderr)
+else:
+    kernable_codepoints = set(cp for cp in all_codepoints
+                              if not (COMBINING_MARKS_START <= cp <= COMBINING_MARKS_END))
 
-print(f"kerning: {len(kern_map)} pairs extracted", file=sys.stderr)
+    # Map each kernable codepoint to the font-stack index that serves it
+    # (same priority logic as load_glyph).
+    cp_to_face_idx = {}
+    for cp in kernable_codepoints:
+        for face_idx, f in enumerate(font_stack):
+            if f.get_char_index(cp) > 0:
+                cp_to_face_idx[cp] = face_idx
+                break
+
+    # Group codepoints by face index
+    face_idx_cps = {}
+    for cp, fi in cp_to_face_idx.items():
+        face_idx_cps.setdefault(fi, set()).add(cp)
+
+    # The ppem used by the existing glyph rasterization:
+    #   face.set_char_size(size << 6, size << 6, 150, 150)
+    # means size_pt at 150 DPI -> ppem = size * 150 / 72
+    ppem = size * 150.0 / 72.0
+
+    for face_idx, cps in face_idx_cps.items():
+        font_path = args.fontstack[face_idx]
+        kern_map.update(extract_kerning_fonttools(font_path, cps, ppem))
+
+    print(f"kerning: {len(kern_map)} pairs extracted", file=sys.stderr)
 
 # --- Derive class-based kerning from pairs ---
 kern_left_classes = []   # list of (codepoint, classId)
@@ -656,36 +662,39 @@ def extract_ligatures_fonttools(font_path, codepoints):
 
     return pairs
 
-ligature_codepoints = set(cp for cp in all_codepoints
-                          if not (COMBINING_MARKS_START <= cp <= COMBINING_MARKS_END))
-
-# Map ligature codepoints to the font-stack index that serves them
-lig_cp_to_face_idx = {}
-for cp in ligature_codepoints:
-    for face_idx, f in enumerate(font_stack):
-        if f.get_char_index(cp) > 0:
-            lig_cp_to_face_idx[cp] = face_idx
-            break
-
-# Group by face index
-lig_face_idx_cps = {}
-for cp, fi in lig_cp_to_face_idx.items():
-    lig_face_idx_cps.setdefault(fi, set()).add(cp)
-
 ligature_pairs = []
-for face_idx, cps in lig_face_idx_cps.items():
-    font_path = args.fontstack[face_idx]
-    ligature_pairs.extend(extract_ligatures_fonttools(font_path, cps))
+if args.no_ligatures:
+    print("ligatures: skipped", file=sys.stderr)
+else:
+    ligature_codepoints = set(cp for cp in all_codepoints
+                              if not (COMBINING_MARKS_START <= cp <= COMBINING_MARKS_END))
 
-# Deduplicate (keep first occurrence) and sort
-seen_lig_keys = set()
-unique_ligature_pairs = []
-for packed, lig_cp in ligature_pairs:
-    if packed not in seen_lig_keys:
-        seen_lig_keys.add(packed)
-        unique_ligature_pairs.append((packed, lig_cp))
-ligature_pairs = sorted(unique_ligature_pairs, key=lambda p: p[0])
-print(f"ligatures: {len(ligature_pairs)} pairs extracted", file=sys.stderr)
+    # Map ligature codepoints to the font-stack index that serves them
+    lig_cp_to_face_idx = {}
+    for cp in ligature_codepoints:
+        for face_idx, f in enumerate(font_stack):
+            if f.get_char_index(cp) > 0:
+                lig_cp_to_face_idx[cp] = face_idx
+                break
+
+    # Group by face index
+    lig_face_idx_cps = {}
+    for cp, fi in lig_cp_to_face_idx.items():
+        lig_face_idx_cps.setdefault(fi, set()).add(cp)
+
+    for face_idx, cps in lig_face_idx_cps.items():
+        font_path = args.fontstack[face_idx]
+        ligature_pairs.extend(extract_ligatures_fonttools(font_path, cps))
+
+    # Deduplicate (keep first occurrence) and sort
+    seen_lig_keys = set()
+    unique_ligature_pairs = []
+    for packed, lig_cp in ligature_pairs:
+        if packed not in seen_lig_keys:
+            seen_lig_keys.add(packed)
+            unique_ligature_pairs.append((packed, lig_cp))
+    ligature_pairs = sorted(unique_ligature_pairs, key=lambda p: p[0])
+    print(f"ligatures: {len(ligature_pairs)} pairs extracted", file=sys.stderr)
 
 compress = args.compress
 
@@ -739,11 +748,25 @@ if compress:
         (0x20A0, 0x20CF),   # Currency Symbols
         (0x2190, 0x21FF),   # Arrows
         (0x2200, 0x22FF),   # Math Operators
+        (0x2E80, 0x2EFF),   # CJK Radicals Supplement
+        (0x3000, 0x303F),   # CJK Symbols and Punctuation
         (0xFB00, 0xFB06),   # Alphabetic Presentation Forms (ligatures)
+        (0xFE30, 0xFE4F),   # CJK Compatibility Forms
+        (0xFF00, 0xFFEF),   # Halfwidth and Fullwidth Forms
         (0xFFFD, 0xFFFD),   # Replacement Character
     ]
 
+    CJK_GROUP_CODEPOINTS = 128
+    CJK_CHUNK_RANGES = [
+        (0x3400, 0x4DBF),   # CJK Extension A
+        (0x4E00, 0x9FFF),   # CJK Unified Ideographs
+        (0xF900, 0xFAFF),   # CJK Compatibility Ideographs
+    ]
+
     def get_script_group(code_point):
+        for i, (start, end) in enumerate(CJK_CHUNK_RANGES):
+            if start <= code_point <= end:
+                return 1000 + i * 1000 + ((code_point - start) // CJK_GROUP_CODEPOINTS)
         for i, (start, end) in enumerate(SCRIPT_GROUP_RANGES):
             if start <= code_point <= end:
                 return i

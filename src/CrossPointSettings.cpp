@@ -1,5 +1,6 @@
 #include "CrossPointSettings.h"
 
+#include <FontManager.h>
 #include <HalStorage.h>
 #include <JsonSettingsIO.h>
 #include <Logging.h>
@@ -65,6 +66,18 @@ void applyLegacyFrontButtonLayout(CrossPointSettings& settings) {
       settings.frontButtonLeft = CrossPointSettings::FRONT_HW_LEFT;
       settings.frontButtonRight = CrossPointSettings::FRONT_HW_RIGHT;
       break;
+  }
+}
+
+uint8_t migrateLegacyLineSpacing(const uint8_t rawValue) {
+  switch (rawValue) {
+    case CrossPointSettings::TIGHT:
+      return 90;
+    case CrossPointSettings::WIDE:
+      return 120;
+    case CrossPointSettings::NORMAL:
+    default:
+      return CrossPointSettings::LINE_SPACING_DEFAULT;
   }
 }
 
@@ -142,7 +155,6 @@ bool CrossPointSettings::loadFromBinaryFile() {
   serialization::readPod(inputFile, version);
   if (version != SETTINGS_FILE_VERSION) {
     LOG_ERR("CPS", "Deserialization failed: Unknown version %u", version);
-    inputFile.close();
     return false;
   }
 
@@ -151,6 +163,7 @@ bool CrossPointSettings::loadFromBinaryFile() {
 
   uint8_t settingsRead = 0;
   bool frontButtonMappingRead = false;
+  bool firstLineIndentRead = false;
   do {
     readAndValidate(inputFile, sleepScreen, SLEEP_SCREEN_MODE_COUNT);
     if (++settingsRead >= fileSettingsCount) break;
@@ -170,7 +183,20 @@ bool CrossPointSettings::loadFromBinaryFile() {
     if (++settingsRead >= fileSettingsCount) break;
     readAndValidate(inputFile, fontSize, FONT_SIZE_COUNT);
     if (++settingsRead >= fileSettingsCount) break;
-    readAndValidate(inputFile, lineSpacing, LINE_COMPRESSION_COUNT);
+    {
+      uint8_t rawLineSpacing = LINE_SPACING_DEFAULT;
+      serialization::readPod(inputFile, rawLineSpacing);
+      if (rawLineSpacing < LINE_COMPRESSION_COUNT) {
+        lineSpacing = migrateLegacyLineSpacing(rawLineSpacing);
+      } else if (rawLineSpacing >= LINE_SPACING_MIN && rawLineSpacing <= LINE_SPACING_MAX) {
+        lineSpacing = rawLineSpacing;
+      } else if (rawLineSpacing >= 20 && rawLineSpacing <= 60) {
+        // Legacy slider builds used a 20..60 range; migrate those to the neutral 1.0x spacing.
+        lineSpacing = LINE_SPACING_DEFAULT;
+      } else {
+        lineSpacing = LINE_SPACING_DEFAULT;
+      }
+    }
     if (++settingsRead >= fileSettingsCount) break;
     readAndValidate(inputFile, paragraphAlignment, PARAGRAPH_ALIGNMENT_COUNT);
     if (++settingsRead >= fileSettingsCount) break;
@@ -228,7 +254,14 @@ bool CrossPointSettings::loadFromBinaryFile() {
     if (++settingsRead >= fileSettingsCount) break;
     serialization::readPod(inputFile, embeddedStyle);
     if (++settingsRead >= fileSettingsCount) break;
+    serialization::readPod(inputFile, firstLineIndent);
+    firstLineIndentRead = true;
+    if (++settingsRead >= fileSettingsCount) break;
   } while (false);
+
+  if (!firstLineIndentRead && extraParagraphSpacing == 0) {
+    firstLineIndent = 1;
+  }
 
   if (frontButtonMappingRead) {
     CrossPointSettings::validateFrontButtonMapping(*this);
@@ -236,12 +269,17 @@ bool CrossPointSettings::loadFromBinaryFile() {
     applyLegacyFrontButtonLayout(*this);
   }
 
-  inputFile.close();
   LOG_DBG("CPS", "Settings loaded from binary file");
   return true;
 }
 
 float CrossPointSettings::getReaderLineCompression() const {
+#if CROSSPOINT_PAPERS3
+  const uint8_t clampedLineSpacing = (lineSpacing < LINE_SPACING_MIN)
+                                         ? LINE_SPACING_MIN
+                                         : ((lineSpacing > LINE_SPACING_MAX) ? LINE_SPACING_MAX : lineSpacing);
+  return static_cast<float>(clampedLineSpacing) / 100.0f;
+#endif
   switch (fontFamily) {
     case BOOKERLY:
     default:
@@ -310,6 +348,33 @@ int CrossPointSettings::getRefreshFrequency() const {
 }
 
 int CrossPointSettings::getReaderFontId() const {
+#if CROSSPOINT_PAPERS3
+  const FontManager& fontManager = FontManager::getInstance();
+  if (fontManager.isExternalFontEnabled()) {
+    return fontManager.getSelectedFontId();
+  }
+  return getBuiltInReaderFontId();
+#else
+  return getBuiltInReaderFontId();
+#endif
+}
+
+int CrossPointSettings::getBuiltInReaderFontId() const {
+#if CROSSPOINT_PAPERS3
+  // Keep all reader content on the CJK-capable Noto Sans SC font, regardless of
+  // any older persisted fontFamily value.
+  switch (fontSize) {
+    case SMALL:
+      return NOTOSANS_12_FONT_ID;
+    case MEDIUM:
+    default:
+      return NOTOSANS_14_FONT_ID;
+    case LARGE:
+      return NOTOSANS_16_FONT_ID;
+    case EXTRA_LARGE:
+      return NOTOSANS_18_FONT_ID;
+  }
+#endif
   switch (fontFamily) {
     case BOOKERLY:
     default:

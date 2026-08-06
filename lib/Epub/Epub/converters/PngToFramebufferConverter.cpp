@@ -206,6 +206,11 @@ int pngDrawCallback(PNGDRAW* pDraw) {
   bool useDithering = ctx->config->useDithering;
   bool caching = ctx->caching;
 
+  if (caching && !ctx->cache.advanceTo(dstY)) {
+    caching = false;
+    ctx->caching = false;
+  }
+
   int srcX = 0;
   int error = 0;
 
@@ -355,11 +360,12 @@ bool PngToFramebufferConverter::decodeToFramebuffer(const std::string& imagePath
     return false;
   }
 
-  // Allocate cache buffer using SCALED dimensions
+  // Start streaming the pixel cache to disk. PNGdec delivers scanlines in
+  // source order and this callback emits at most one destination row each time.
   ctx.caching = !config.cachePath.empty();
   if (ctx.caching) {
-    if (!ctx.cache.allocate(ctx.dstWidth, ctx.dstHeight, config.x, config.y)) {
-      LOG_ERR("PNG", "Failed to allocate cache buffer, continuing without caching");
+    if (!ctx.cache.begin(config.cachePath, ctx.dstWidth, ctx.dstHeight, config.x, config.y, 1)) {
+      LOG_ERR("PNG", "Failed to start cache stream, continuing without caching");
       ctx.caching = false;
     }
   }
@@ -373,6 +379,7 @@ bool PngToFramebufferConverter::decodeToFramebuffer(const std::string& imagePath
 
   if (rc != PNG_SUCCESS) {
     LOG_ERR("PNG", "Decode failed: %d", rc);
+    if (ctx.caching) ctx.cache.abort();
     png->close();
     delete png;
     return false;
@@ -382,9 +389,9 @@ bool PngToFramebufferConverter::decodeToFramebuffer(const std::string& imagePath
   delete png;
   LOG_DBG("PNG", "PNG decoding complete - render time: %lu ms", decodeTime);
 
-  // Write cache file if caching was enabled and buffer was allocated
+  // Finalize the streamed cache.
   if (ctx.caching) {
-    ctx.cache.writeToFile(config.cachePath);
+    ctx.cache.finalize();
   }
 
   return true;

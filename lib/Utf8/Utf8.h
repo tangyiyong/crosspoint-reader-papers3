@@ -22,3 +22,9 @@ inline bool utf8IsCombiningMark(const uint32_t cp) {
          || (cp >= 0x20D0 && cp <= 0x20FF)   // Combining Diacritical Marks for Symbols
          || (cp >= 0xFE20 && cp <= 0xFE2F);  // Combining Half Marks
 }
+
+// Unicode format controls affect text direction/joining but have no visible glyph.
+inline bool utf8IsFormatControl(const uint32_t cp) {
+  return (cp >= 0x200B && cp <= 0x200F) || cp == 0x202A || cp == 0x202B || cp == 0x202C || cp == 0x202D ||
+         cp == 0x202E || (cp >= 0x2060 && cp <= 0x2064) || cp == 0xFEFF;
+}

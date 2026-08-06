@@ -3,6 +3,7 @@
 #include <GfxRenderer.h>
 #include <Logging.h>
 #include <Serialization.h>
+#include <esp_heap_caps.h>
 
 #include "../converters/DitherUtils.h"
 #include "../converters/ImageDecoderFactory.h"
@@ -28,6 +29,31 @@ std::string getCachePath(const std::string& imagePath) {
   return imagePath + ".pxc";
 }
 
+uint8_t* allocateCacheReadBuffer(const size_t bytes) {
+#ifdef BOARD_HAS_PSRAM
+  return static_cast<uint8_t*>(heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+#else
+  return static_cast<uint8_t*>(heap_caps_malloc(bytes, MALLOC_CAP_8BIT));
+#endif
+}
+
+void freeCacheReadBuffer(void* ptr) {
+  if (ptr) heap_caps_free(ptr);
+}
+
+struct ImageRenderScope {
+  GfxRenderer& renderer;
+  bool active;
+
+  ImageRenderScope(GfxRenderer& renderer, const bool active) : renderer(renderer), active(active) {
+    if (active) renderer.beginImageRender();
+  }
+
+  ~ImageRenderScope() {
+    if (active) renderer.endImageRender();
+  }
+};
+
 bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x, int y, int expectedWidth,
                      int expectedHeight) {
   FsFile cacheFile;
@@ -37,7 +63,6 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
 
   uint16_t cachedWidth, cachedHeight;
   if (cacheFile.read(&cachedWidth, 2) != 2 || cacheFile.read(&cachedHeight, 2) != 2) {
-    cacheFile.close();
     return false;
   }
 
@@ -47,7 +72,6 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
   if (widthDiff > 1 || heightDiff > 1) {
     LOG_ERR("IMG", "Cache dimension mismatch: %dx%d vs %dx%d", cachedWidth, cachedHeight, expectedWidth,
             expectedHeight);
-    cacheFile.close();
     return false;
   }
 
@@ -57,35 +81,50 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
 
   LOG_DBG("IMG", "Loading from cache: %s (%dx%d)", cachePath.c_str(), cachedWidth, cachedHeight);
 
-  // Read and render row by row to minimize memory usage
+  // Read several rows per SD access without holding the full image.
   const int bytesPerRow = (cachedWidth + 3) / 4;  // 2 bits per pixel, 4 pixels per byte
-  uint8_t* rowBuffer = (uint8_t*)malloc(bytesPerRow);
-  if (!rowBuffer) {
+  int rowsPerRead = 4096 / bytesPerRow;
+  if (rowsPerRead < 1) rowsPerRead = 1;
+  if (rowsPerRead > cachedHeight) rowsPerRead = cachedHeight;
+  uint8_t* readBuffer = allocateCacheReadBuffer(static_cast<size_t>(rowsPerRead) * bytesPerRow);
+  if (!readBuffer && rowsPerRead > 1) {
+    rowsPerRead = 1;
+    readBuffer = allocateCacheReadBuffer(static_cast<size_t>(bytesPerRow));
+  }
+  if (!readBuffer) {
     LOG_ERR("IMG", "Failed to allocate row buffer");
-    cacheFile.close();
     return false;
   }
 
+  int rowsInBuffer = 0;
+  int bufferRow = 0;
   for (int row = 0; row < cachedHeight; row++) {
-    if (cacheFile.read(rowBuffer, bytesPerRow) != bytesPerRow) {
-      LOG_ERR("IMG", "Cache read error at row %d", row);
-      free(rowBuffer);
-      cacheFile.close();
-      return false;
+    if (bufferRow >= rowsInBuffer) {
+      const int toRead = (cachedHeight - row < rowsPerRead) ? (cachedHeight - row) : rowsPerRead;
+      const size_t bytes = static_cast<size_t>(toRead) * bytesPerRow;
+      if (cacheFile.read(readBuffer, bytes) != static_cast<int>(bytes)) {
+        LOG_ERR("IMG", "Cache read error at row %d", row);
+        freeCacheReadBuffer(readBuffer);
+        return false;
+      }
+      rowsInBuffer = toRead;
+      bufferRow = 0;
     }
 
-    int destY = y + row;
+    const uint8_t* rowBuffer = readBuffer + static_cast<size_t>(bufferRow) * bytesPerRow;
+    bufferRow++;
+
+    const int destY = y + row;
     for (int col = 0; col < cachedWidth; col++) {
-      int byteIdx = col / 4;
-      int bitShift = 6 - (col % 4) * 2;  // MSB first within byte
-      uint8_t pixelValue = (rowBuffer[byteIdx] >> bitShift) & 0x03;
+      const int byteIdx = col >> 2;
+      const int bitShift = 6 - (col & 3) * 2;  // MSB first within byte
+      const uint8_t pixelValue = (rowBuffer[byteIdx] >> bitShift) & 0x03;
 
       drawPixelWithRenderMode(renderer, x + col, destY, pixelValue);
     }
   }
 
-  free(rowBuffer);
-  cacheFile.close();
+  freeCacheReadBuffer(readBuffer);
   LOG_DBG("IMG", "Cache render complete");
   return true;
 }
@@ -93,6 +132,10 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
 }  // namespace
 
 void ImageBlock::render(GfxRenderer& renderer, const int x, const int y) {
+  if (renderer.isFontCacheScanning()) {
+    return;
+  }
+
   LOG_DBG("IMG", "Rendering image at %d,%d: %s (%dx%d)", x, y, imagePath.c_str(), width, height);
 
   const int screenWidth = renderer.getScreenWidth();
@@ -103,6 +146,12 @@ void ImageBlock::render(GfxRenderer& renderer, const int x, const int y) {
     LOG_ERR("IMG", "Invalid render position: (%d,%d) size (%dx%d) screen (%dx%d)", x, y, width, height, screenWidth,
             screenHeight);
     return;
+  }
+
+  const bool skipInversion = renderer.isDarkMode() && !renderer.shouldInvertImagesInDarkMode();
+  ImageRenderScope imageScope(renderer, skipInversion);
+  if (skipInversion) {
+    renderer.fillRect(x, y, width, height, false);
   }
 
   // Try to render from cache first

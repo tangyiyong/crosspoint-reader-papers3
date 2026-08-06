@@ -6,6 +6,7 @@
 #include <WiFi.h>
 #include <esp_sntp.h>
 
+#include "Epub/Section.h"
 #include "KOReaderCredentialStore.h"
 #include "KOReaderDocumentId.h"
 #include "MappedInputManager.h"
@@ -14,6 +15,16 @@
 #include "fontIds.h"
 
 namespace {
+CrossPointPosition makeLocalPositionWithParagraph(const int spineIndex, const int page, const int totalPages,
+                                                  const std::optional<uint16_t>& paragraphIndex) {
+  CrossPointPosition pos = {spineIndex, page, totalPages};
+  if (paragraphIndex.has_value()) {
+    pos.paragraphIndex = *paragraphIndex;
+    pos.hasParagraphIndex = true;
+  }
+  return pos;
+}
+
 void syncTimeWithNTP() {
   // Stop SNTP if already running (can't reconfigure while running)
   if (esp_sntp_enabled()) {
@@ -135,8 +146,19 @@ void KOReaderSyncActivity::performSync() {
   KOReaderPosition koPos = {remoteProgress.progress, remoteProgress.percentage};
   remotePosition = ProgressMapper::toCrossPoint(epub, koPos, currentSpineIndex, totalPagesInSpine);
 
+  if (remotePosition.hasParagraphIndex) {
+    Section tempSection(epub, remotePosition.spineIndex, renderer);
+    const auto paragraphPage = tempSection.getPageForParagraphIndex(remotePosition.paragraphIndex);
+    if (paragraphPage.has_value()) {
+      LOG_DBG("KOSync", "Paragraph %u resolved to page %d (was %d)", remotePosition.paragraphIndex, *paragraphPage,
+              remotePosition.pageNumber);
+      remotePosition.pageNumber = *paragraphPage;
+    }
+  }
+
   // Calculate local progress in KOReader format (for display)
-  CrossPointPosition localPos = {currentSpineIndex, currentPage, totalPagesInSpine};
+  CrossPointPosition localPos =
+      makeLocalPositionWithParagraph(currentSpineIndex, currentPage, totalPagesInSpine, currentParagraphIndex);
   localProgress = ProgressMapper::toKOReader(epub, localPos);
 
   {
@@ -162,7 +184,8 @@ void KOReaderSyncActivity::performUpload() {
   requestUpdateAndWait();
 
   // Convert current position to KOReader format
-  CrossPointPosition localPos = {currentSpineIndex, currentPage, totalPagesInSpine};
+  CrossPointPosition localPos =
+      makeLocalPositionWithParagraph(currentSpineIndex, currentPage, totalPagesInSpine, currentParagraphIndex);
   KOReaderPosition koPos = ProgressMapper::toKOReader(epub, localPos);
 
   KOReaderProgress progress;
@@ -346,24 +369,6 @@ void KOReaderSyncActivity::loop() {
   }
 
   if (state == SHOWING_RESULT) {
-#if CROSSPOINT_PAPERS3
-    if (mappedInput.wasTapped()) {
-      // Tap left half = option 0 (sync remote), right half = option 1 (upload local)
-      const int16_t touchX = mappedInput.getTouchX();
-      selectedOption = (touchX < renderer.getScreenWidth() / 2) ? 0 : 1;
-      if (selectedOption == 0) {
-        setResult(SyncResult{remotePosition.spineIndex, remotePosition.pageNumber});
-        finish();
-      } else {
-        performUpload();
-      }
-    } else if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
-      ActivityResult result;
-      result.isCancelled = true;
-      setResult(std::move(result));
-      finish();
-    }
-#else
     // Navigate options
     if (mappedInput.wasReleased(MappedInputManager::Button::Up) ||
         mappedInput.wasReleased(MappedInputManager::Button::Left)) {
@@ -392,16 +397,11 @@ void KOReaderSyncActivity::loop() {
       setResult(std::move(result));
       finish();
     }
-#endif
     return;
   }
 
   if (state == NO_REMOTE_PROGRESS) {
-#if CROSSPOINT_PAPERS3
-    if (mappedInput.wasTapped()) {
-#else
     if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-#endif
       // Calculate hash if not done yet
       if (documentHash.empty()) {
         if (KOREADER_STORE.getMatchMethod() == DocumentMatchMethod::FILENAME) {

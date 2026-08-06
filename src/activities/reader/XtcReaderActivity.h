@@ -16,7 +16,9 @@ class XtcReaderActivity final : public Activity {
 
   uint32_t currentPage = 0;
   int pagesUntilFullRefresh = 0;
+  bool chapterMenuLongPressHandled = false;
 
+  void openChapterSelection();
   void renderPage();
   void saveProgress() const;
   void loadProgress();
@@ -29,4 +31,5 @@ class XtcReaderActivity final : public Activity {
   void loop() override;
   void render(RenderLock&&) override;
   bool isReaderActivity() const override { return true; }
+  bool supportsLandscape() const override { return true; }
 };

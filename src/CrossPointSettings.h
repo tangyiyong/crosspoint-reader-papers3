@@ -66,6 +66,8 @@ class CrossPointSettings {
     ORIENTATION_COUNT
   };
 
+  enum UI_ORIENTATION { UI_PORTRAIT = 0, UI_INVERTED = 1, UI_ORIENTATION_COUNT };
+
 #if CROSSPOINT_PAPERS3
   static bool isPaperS3OrientationSupported(uint8_t orientation) {
     return orientation == PORTRAIT || orientation == LANDSCAPE_CCW;
@@ -109,7 +111,13 @@ class CrossPointSettings {
   enum FONT_FAMILY { BOOKERLY = 0, NOTOSANS = 1, OPENDYSLEXIC = 2, FONT_FAMILY_COUNT };
   // Font size options
   enum FONT_SIZE { SMALL = 0, MEDIUM = 1, LARGE = 2, EXTRA_LARGE = 3, FONT_SIZE_COUNT };
+  // Legacy line spacing enum values kept for migration from older settings.
   enum LINE_COMPRESSION { TIGHT = 0, NORMAL = 1, WIDE = 2, LINE_COMPRESSION_COUNT };
+  // Line spacing factor in percent of the current font line height.
+  // 100 = 1.0x, 80 = 0.8x, 250 = 2.5x.
+  static constexpr uint8_t LINE_SPACING_MIN = 80;
+  static constexpr uint8_t LINE_SPACING_MAX = 250;
+  static constexpr uint8_t LINE_SPACING_DEFAULT = 100;
   enum PARAGRAPH_ALIGNMENT {
     JUSTIFIED = 0,
     LEFT_ALIGN = 1,
@@ -140,13 +148,16 @@ class CrossPointSettings {
   };
 
   // Short power button press actions
-  enum SHORT_PWRBTN { IGNORE = 0, SLEEP = 1, PAGE_TURN = 2, SHORT_PWRBTN_COUNT };
+  enum SHORT_PWRBTN { IGNORE = 0, SLEEP = 1, PAGE_TURN = 2, FORCE_REFRESH = 3, SHORT_PWRBTN_COUNT };
 
   // Hide battery percentage
   enum HIDE_BATTERY_PERCENTAGE { HIDE_NEVER = 0, HIDE_READER = 1, HIDE_ALWAYS = 2, HIDE_BATTERY_PERCENTAGE_COUNT };
 
   // UI Theme
   enum UI_THEME { CLASSIC = 0, LYRA = 1, LYRA_3_COVERS = 2 };
+
+  // Display color mode
+  enum COLOR_MODE { LIGHT_MODE = 0, DARK_MODE = 1, COLOR_MODE_COUNT };
 
   // Image rendering in EPUB reader
   enum IMAGE_RENDERING { IMAGES_DISPLAY = 0, IMAGES_PLACEHOLDER = 1, IMAGES_SUPPRESS = 2, IMAGE_RENDERING_COUNT };
@@ -165,6 +176,18 @@ class CrossPointSettings {
   uint8_t statusBarProgressBarThickness = PROGRESS_BAR_NORMAL;
   uint8_t statusBarTitle = CHAPTER_TITLE;
   uint8_t statusBarBattery = 1;
+  // Clock display in status bar (0 = hidden, 1 = visible).
+  // Requires the BM8563 RTC; gated on halClock.isAvailable().
+  uint8_t statusBarClock = 0;
+  // Clock UTC offset in quarter-hour steps, biased by 48 so it fits in uint8_t.
+  // Value 48 = UTC+0, 0 = UTC-12:00, 104 = UTC+14:00.
+  // Quarter-hour granularity supports oddball zones like Nepal (+5:45) and Chatham (+12:45).
+  uint8_t clockUtcOffsetQ = 48;
+  // Clock display format: 0 = 24-hour, 1 = 12-hour
+  uint8_t clockFormat = 0;
+  // Set once an NTP sync succeeds. Used to skip re-syncing on every WiFi connect.
+  // Resetting to 0 (e.g. via the web UI) forces a re-sync on next WiFi connect.
+  uint8_t clockHasBeenSynced = 0;
   // Text rendering settings
   uint8_t extraParagraphSpacing = 1;
   uint8_t textAntiAliasing = 1;
@@ -173,6 +196,8 @@ class CrossPointSettings {
   // EPUB reading orientation settings
   // 0 = portrait (default), 1 = landscape clockwise, 2 = inverted, 3 = landscape counter-clockwise
   uint8_t orientation = PORTRAIT;
+  // UI orientation is independent from reader orientation. PaperS3 keeps UI to portrait/inverted only.
+  uint8_t uiOrientation = UI_PORTRAIT;
   // Button layouts (front layout retained for migration only)
   uint8_t frontButtonLayout = BACK_CONFIRM_LEFT_RIGHT;
   uint8_t sideButtonLayout = PREV_NEXT;
@@ -183,9 +208,9 @@ class CrossPointSettings {
   uint8_t frontButtonLeft = FRONT_HW_LEFT;
   uint8_t frontButtonRight = FRONT_HW_RIGHT;
   // Reader font settings
-  uint8_t fontFamily = BOOKERLY;
+  uint8_t fontFamily = NOTOSANS;
   uint8_t fontSize = MEDIUM;
-  uint8_t lineSpacing = NORMAL;
+  uint8_t lineSpacing = LINE_SPACING_DEFAULT;
   uint8_t paragraphAlignment = JUSTIFIED;
   // Auto-sleep timeout setting (default 10 minutes)
   uint8_t sleepTimeout = SLEEP_10_MIN;
@@ -217,6 +242,12 @@ class CrossPointSettings {
   uint8_t showHiddenFiles = 0;
   // Image rendering mode in EPUB reader
   uint8_t imageRendering = IMAGES_DISPLAY;
+  // Invert EPUB/image pixels in dark mode instead of keeping images in their original polarity.
+  uint8_t invertImages = 0;
+  // Global UI and reader color mode.
+  uint8_t colorMode = LIGHT_MODE;
+  // Add a visual first-line indent for EPUB paragraphs that do not define CSS text-indent.
+  uint8_t firstLineIndent = 0;
 
   ~CrossPointSettings() = default;
 
@@ -227,6 +258,7 @@ class CrossPointSettings {
     return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? 10 : 400;
   }
   int getReaderFontId() const;
+  int getBuiltInReaderFontId() const;
 
   // If count_only is true, returns the number of settings items that would be written.
   uint8_t writeSettings(FsFile& file, bool count_only = false) const;

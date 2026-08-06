@@ -10,18 +10,16 @@
 
 namespace {
 #if CROSSPOINT_PAPERS3
-uint8_t orientationLabelIndex(uint8_t orientation) {
-  return orientation == CrossPointSettings::LANDSCAPE_CCW ? 1 : 0;
-}
+uint8_t orientationLabelIndex(uint8_t orientation) { return orientation == CrossPointSettings::LANDSCAPE_CCW ? 1 : 0; }
 #endif
 }  // namespace
 
 EpubReaderMenuActivity::EpubReaderMenuActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                                const std::string& title, const int currentPage, const int totalPages,
                                                const int bookProgressPercent, const uint8_t currentOrientation,
-                                               const bool hasFootnotes)
+                                               const bool hasFootnotes, const ActionMask enabledActions)
     : Activity("EpubReaderMenu", renderer, mappedInput),
-      menuItems(buildMenuItems(hasFootnotes)),
+      menuItems(buildMenuItems(hasFootnotes, enabledActions)),
       title(title),
       pendingOrientation(
 #if CROSSPOINT_PAPERS3
@@ -29,26 +27,35 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(GfxRenderer& renderer, MappedInpu
 #else
           currentOrientation
 #endif
-      ),
+              ),
       currentPage(currentPage),
       totalPages(totalPages),
-      bookProgressPercent(bookProgressPercent) {}
+      bookProgressPercent(bookProgressPercent) {
+}
 
-std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes) {
+std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes,
+                                                                                    ActionMask enabledActions) {
   std::vector<MenuItem> items;
-  items.reserve(10);
-  items.push_back({MenuAction::SELECT_CHAPTER, StrId::STR_SELECT_CHAPTER});
+  items.reserve(11);
+  auto addIfEnabled = [&items, enabledActions](MenuAction action, StrId labelId) {
+    if ((enabledActions & actionMask(action)) != 0) {
+      items.push_back({action, labelId});
+    }
+  };
+
+  addIfEnabled(MenuAction::SELECT_CHAPTER, StrId::STR_SELECT_CHAPTER);
   if (hasFootnotes) {
-    items.push_back({MenuAction::FOOTNOTES, StrId::STR_FOOTNOTES});
+    addIfEnabled(MenuAction::FOOTNOTES, StrId::STR_FOOTNOTES);
   }
-  items.push_back({MenuAction::ROTATE_SCREEN, StrId::STR_ORIENTATION});
-  items.push_back({MenuAction::AUTO_PAGE_TURN, StrId::STR_AUTO_TURN_PAGES_PER_MIN});
-  items.push_back({MenuAction::GO_TO_PERCENT, StrId::STR_GO_TO_PERCENT});
-  items.push_back({MenuAction::SCREENSHOT, StrId::STR_SCREENSHOT_BUTTON});
-  items.push_back({MenuAction::DISPLAY_QR, StrId::STR_DISPLAY_QR});
-  items.push_back({MenuAction::GO_HOME, StrId::STR_GO_HOME_BUTTON});
-  items.push_back({MenuAction::SYNC, StrId::STR_SYNC_PROGRESS});
-  items.push_back({MenuAction::DELETE_CACHE, StrId::STR_DELETE_CACHE});
+  addIfEnabled(MenuAction::ROTATE_SCREEN, StrId::STR_ORIENTATION);
+  addIfEnabled(MenuAction::COLOR_MODE, StrId::STR_COLOR_MODE);
+  addIfEnabled(MenuAction::AUTO_PAGE_TURN, StrId::STR_AUTO_TURN_PAGES_PER_MIN);
+  addIfEnabled(MenuAction::GO_TO_PERCENT, StrId::STR_GO_TO_PERCENT);
+  addIfEnabled(MenuAction::SCREENSHOT, StrId::STR_SCREENSHOT_BUTTON);
+  addIfEnabled(MenuAction::DISPLAY_QR, StrId::STR_DISPLAY_QR);
+  addIfEnabled(MenuAction::GO_HOME, StrId::STR_GO_HOME_BUTTON);
+  addIfEnabled(MenuAction::SYNC, StrId::STR_SYNC_PROGRESS);
+  addIfEnabled(MenuAction::DELETE_CACHE, StrId::STR_DELETE_CACHE);
   return items;
 }
 
@@ -71,23 +78,7 @@ void EpubReaderMenuActivity::loop() {
     requestUpdate();
   });
 
-#if CROSSPOINT_PAPERS3
-  if (mappedInput.wasTapped()) {
-    // Tap-to-select: map touch Y to menu item
-    {
-      constexpr int lineHeight = 75;
-      const int startY = 85;
-      const int16_t touchY = mappedInput.getTouchY();
-      if (touchY >= startY) {
-        int tappedRow = (touchY - startY) / lineHeight;
-        if (tappedRow >= 0 && tappedRow < static_cast<int>(menuItems.size())) {
-          selectedIndex = tappedRow;
-        }
-      }
-    }
-#else
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-#endif
     const auto selectedAction = menuItems[selectedIndex].action;
     if (selectedAction == MenuAction::ROTATE_SCREEN) {
       // Cycle orientation preview locally; actual rotation happens on menu exit.
@@ -102,6 +93,16 @@ void EpubReaderMenuActivity::loop() {
 
     if (selectedAction == MenuAction::AUTO_PAGE_TURN) {
       selectedPageTurnOption = (selectedPageTurnOption + 1) % pageTurnLabels.size();
+      requestUpdate();
+      return;
+    }
+
+    if (selectedAction == MenuAction::COLOR_MODE) {
+      SETTINGS.colorMode = SETTINGS.colorMode == CrossPointSettings::COLOR_MODE::DARK_MODE
+                               ? CrossPointSettings::COLOR_MODE::LIGHT_MODE
+                               : CrossPointSettings::COLOR_MODE::DARK_MODE;
+      SETTINGS.saveToFile();
+      renderer.setDarkMode(SETTINGS.colorMode == CrossPointSettings::COLOR_MODE::DARK_MODE);
       requestUpdate();
       return;
     }
@@ -193,6 +194,13 @@ void EpubReaderMenuActivity::render(RenderLock&&) {
       const auto width = renderer.getTextWidth(UI_10_FONT_ID, value);
       renderer.drawText(UI_10_FONT_ID, contentX + contentWidth - 20 - width, displayY + textYOff, value, !isSelected);
     }
+
+    const std::string value = getMenuItemValue(menuItems[i].action);
+    if (!value.empty()) {
+      const auto width = renderer.getTextWidth(UI_10_FONT_ID, value.c_str());
+      renderer.drawText(UI_10_FONT_ID, contentX + contentWidth - 20 - width, displayY + textYOff, value.c_str(),
+                        !isSelected);
+    }
   }
 
   // Footer / Hints
@@ -200,4 +208,14 @@ void EpubReaderMenuActivity::render(RenderLock&&) {
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();
+}
+
+std::string EpubReaderMenuActivity::getMenuItemValue(const MenuAction action) const {
+  switch (action) {
+    case MenuAction::COLOR_MODE:
+      return SETTINGS.colorMode == CrossPointSettings::COLOR_MODE::DARK_MODE ? std::string(tr(STR_DARK))
+                                                                             : std::string(tr(STR_LIGHT));
+    default:
+      return "";
+  }
 }

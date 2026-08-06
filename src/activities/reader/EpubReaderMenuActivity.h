@@ -2,6 +2,7 @@
 #include <Epub.h>
 #include <I18n.h>
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -17,21 +18,30 @@ class EpubReaderMenuActivity final : public Activity {
     GO_TO_PERCENT,
     AUTO_PAGE_TURN,
     ROTATE_SCREEN,
+    COLOR_MODE,
     SCREENSHOT,
     DISPLAY_QR,
     GO_HOME,
     SYNC,
     DELETE_CACHE
   };
+  using ActionMask = uint16_t;
+  static constexpr ActionMask actionMask(MenuAction action) {
+    return static_cast<ActionMask>(1U << static_cast<uint8_t>(action));
+  }
+  static constexpr ActionMask ALL_ACTIONS = 0x07FF;
 
   explicit EpubReaderMenuActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& title,
                                   const int currentPage, const int totalPages, const int bookProgressPercent,
-                                  const uint8_t currentOrientation, const bool hasFootnotes);
+                                  const uint8_t currentOrientation, const bool hasFootnotes,
+                                  ActionMask enabledActions = ALL_ACTIONS);
 
   void onEnter() override;
   void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
+  bool isReaderActivity() const override { return false; }
+  bool supportsLandscape() const override { return true; }
 
  private:
   struct MenuItem {
@@ -39,7 +49,7 @@ class EpubReaderMenuActivity final : public Activity {
     StrId labelId;
   };
 
-  static std::vector<MenuItem> buildMenuItems(bool hasFootnotes);
+  static std::vector<MenuItem> buildMenuItems(bool hasFootnotes, ActionMask enabledActions);
 
   // Fixed menu layout
   const std::vector<MenuItem> menuItems;
@@ -60,4 +70,6 @@ class EpubReaderMenuActivity final : public Activity {
   int currentPage = 0;
   int totalPages = 0;
   int bookProgressPercent = 0;
+
+  std::string getMenuItemValue(MenuAction action) const;
 };

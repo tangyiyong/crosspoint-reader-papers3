@@ -2,9 +2,11 @@
 
 #include <EpdFontFamily.h>
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "blocks/BlockStyle.h"
@@ -13,13 +15,19 @@
 class GfxRenderer;
 
 class ParsedText {
-  std::vector<std::string> words;
+  std::vector<char> wordArena;
+  std::vector<uint32_t> wordOffsets;
+  std::vector<uint16_t> wordLengths;
   std::vector<EpdFontFamily::Style> wordStyles;
   std::vector<bool> wordContinues;  // true = word attaches to previous (no space before it)
   BlockStyle blockStyle;
   bool extraParagraphSpacing;
+  bool firstLineIndent;
   bool hyphenationEnabled;
 
+  std::string_view wordView(size_t i) const { return {wordArena.data() + wordOffsets[i], wordLengths[i]}; }
+  void pushWord(std::string_view word, EpdFontFamily::Style style, bool continues);
+  void eraseFront(size_t count);
   void applyParagraphIndent();
   std::vector<size_t> computeLineBreaks(const GfxRenderer& renderer, int fontId, int pageWidth,
                                         std::vector<uint16_t>& wordWidths, std::vector<bool>& continuesVec);
@@ -35,15 +43,19 @@ class ParsedText {
 
  public:
   explicit ParsedText(const bool extraParagraphSpacing, const bool hyphenationEnabled = false,
-                      const BlockStyle& blockStyle = BlockStyle())
-      : blockStyle(blockStyle), extraParagraphSpacing(extraParagraphSpacing), hyphenationEnabled(hyphenationEnabled) {}
+                      const BlockStyle& blockStyle = BlockStyle(), const bool firstLineIndent = false)
+      : blockStyle(blockStyle),
+        extraParagraphSpacing(extraParagraphSpacing),
+        firstLineIndent(firstLineIndent),
+        hyphenationEnabled(hyphenationEnabled) {}
   ~ParsedText() = default;
 
-  void addWord(std::string word, EpdFontFamily::Style fontStyle, bool underline = false, bool attachToPrevious = false);
+  void addWord(std::string_view word, EpdFontFamily::Style fontStyle, bool underline = false,
+               bool attachToPrevious = false);
   void setBlockStyle(const BlockStyle& blockStyle) { this->blockStyle = blockStyle; }
   BlockStyle& getBlockStyle() { return blockStyle; }
-  size_t size() const { return words.size(); }
-  bool isEmpty() const { return words.empty(); }
+  size_t size() const { return wordOffsets.size(); }
+  bool isEmpty() const { return wordOffsets.empty(); }
   void layoutAndExtractLines(const GfxRenderer& renderer, int fontId, uint16_t viewportWidth,
                              const std::function<void(std::shared_ptr<TextBlock>)>& processLine,
                              bool includeLastLine = true);

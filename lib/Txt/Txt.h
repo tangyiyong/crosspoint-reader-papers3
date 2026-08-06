@@ -5,12 +5,15 @@
 #include <memory>
 #include <string>
 
+#include "TxtEncoding.h"
+
 class Txt {
   std::string filepath;
   std::string cacheBasePath;
   std::string cachePath;
   bool loaded = false;
   size_t fileSize = 0;
+  TxtEncoding encoding = TxtEncoding::Utf8;
 
  public:
   explicit Txt(std::string path, std::string cacheBasePath);
@@ -20,6 +23,7 @@ class Txt {
   [[nodiscard]] const std::string& getCachePath() const { return cachePath; }
   [[nodiscard]] std::string getTitle() const;
   [[nodiscard]] size_t getFileSize() const { return fileSize; }
+  [[nodiscard]] TxtEncoding getEncoding() const { return encoding; }
 
   void setupCacheDir() const;
 
