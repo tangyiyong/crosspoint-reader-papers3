@@ -24,6 +24,29 @@ void NetworkModeSelectionActivity::onEnter() {
 void NetworkModeSelectionActivity::onExit() { Activity::onExit(); }
 
 void NetworkModeSelectionActivity::loop() {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const auto pageWidth = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
+  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
+
+  if (mappedInput.wasContentTapped()) {
+    const int tappedIndex = UITheme::getInstance().hitTestListItem(
+        Rect{0, contentTop, pageWidth, contentHeight}, MENU_ITEM_COUNT, selectedIndex, true, mappedInput.getTouchX(),
+        mappedInput.getTouchY());
+    if (tappedIndex >= 0) {
+      selectedIndex = tappedIndex;
+      NetworkMode mode = NetworkMode::JOIN_NETWORK;
+      if (selectedIndex == 1) {
+        mode = NetworkMode::CONNECT_CALIBRE;
+      } else if (selectedIndex == 2) {
+        mode = NetworkMode::CREATE_HOTSPOT;
+      }
+      onModeSelected(mode);
+      return;
+    }
+  }
+
   // Handle back button - cancel
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
     onCancel();

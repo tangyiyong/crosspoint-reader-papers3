@@ -435,7 +435,8 @@ bool JsonSettingsIO::saveWifi(const WifiCredentialStore& store, const char* path
   doc["lastConnectedSsid"] = store.getLastConnectedSsid();
 
   JsonArray arr = doc["credentials"].to<JsonArray>();
-  for (const auto& cred : store.getCredentials()) {
+  const auto credentials = store.getCredentialsSnapshot();
+  for (const auto& cred : credentials) {
     JsonObject obj = arr.add<JsonObject>();
     obj["ssid"] = cred.ssid;
     obj["password_obf"] = obfuscation::obfuscateToBase64(cred.password);
@@ -457,12 +458,13 @@ bool JsonSettingsIO::loadWifi(WifiCredentialStore& store, const char* json, bool
     return false;
   }
 
-  store.lastConnectedSsid = doc["lastConnectedSsid"] | std::string("");
+  std::string loadedLastSsid = doc["lastConnectedSsid"] | std::string("");
 
-  store.credentials.clear();
+  std::vector<WifiCredential> loadedCredentials;
+  loadedCredentials.reserve(WifiCredentialStore::MAX_NETWORKS);
   JsonArray arr = doc["credentials"].as<JsonArray>();
   for (JsonObject obj : arr) {
-    if (store.credentials.size() >= store.MAX_NETWORKS) break;
+    if (loadedCredentials.size() >= WifiCredentialStore::MAX_NETWORKS) break;
     WifiCredential cred;
     cred.ssid = obj["ssid"] | std::string("");
     const JsonVariantConst passwordLength = obj["password_len"];
@@ -528,10 +530,11 @@ bool JsonSettingsIO::loadWifi(WifiCredentialStore& store, const char* json, bool
       if (needsResave) *needsResave = true;
       continue;
     }
-    store.credentials.push_back(cred);
+    loadedCredentials.push_back(std::move(cred));
   }
 
-  LOG_DBG("WCS", "Loaded %zu WiFi credentials from file", store.credentials.size());
+  store.replaceLoadedCredentials(std::move(loadedLastSsid), std::move(loadedCredentials));
+  LOG_DBG("WCS", "Loaded %zu WiFi credentials from file", store.getCredentialCount());
   return true;
 }
 

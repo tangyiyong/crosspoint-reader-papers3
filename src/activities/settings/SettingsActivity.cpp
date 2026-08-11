@@ -93,6 +93,39 @@ void SettingsActivity::onExit() {
 
 void SettingsActivity::loop() {
   bool hasChangedCategory = false;
+  const auto pageWidth = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
+  const auto& metrics = UITheme::getInstance().getMetrics();
+
+  if (mappedInput.wasContentTapped()) {
+    const Rect tabRect{0, metrics.topPadding + metrics.headerHeight, pageWidth, metrics.tabBarHeight};
+    const int touchX = mappedInput.getTouchX();
+    const int touchY = mappedInput.getTouchY();
+    if (touchY >= tabRect.y && touchY < tabRect.y + tabRect.height) {
+      const int tabWidth = pageWidth / categoryCount;
+      const int tappedCategory = tabWidth > 0 ? touchX / tabWidth : -1;
+      if (tappedCategory >= 0 && tappedCategory < categoryCount) {
+        selectedCategoryIndex = tappedCategory;
+        selectedSettingIndex = 0;
+        hasChangedCategory = true;
+        requestUpdate();
+      }
+    } else {
+      const Rect listRect{0, metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.verticalSpacing,
+                          pageWidth,
+                          pageHeight -
+                              (metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight +
+                               metrics.buttonHintsHeight + metrics.verticalSpacing * 2)};
+      const int tappedSetting = UITheme::getInstance().hitTestListItem(listRect, settingsCount, selectedSettingIndex - 1,
+                                                                       false, touchX, touchY);
+      if (tappedSetting >= 0) {
+        selectedSettingIndex = tappedSetting + 1;
+        toggleCurrentSetting();
+        requestUpdate();
+        return;
+      }
+    }
+  }
 
   // Handle actions with early return
   if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {

@@ -45,6 +45,24 @@ void RecentBooksActivity::onExit() {
 }
 
 void RecentBooksActivity::loop() {
+  const auto pageWidth = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
+
+  if (mappedInput.wasContentTapped()) {
+    const int tappedIndex = UITheme::getInstance().hitTestListItem(
+        Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(recentBooks.size()),
+        static_cast<int>(selectorIndex), true, mappedInput.getTouchX(), mappedInput.getTouchY());
+    if (tappedIndex >= 0 && tappedIndex < static_cast<int>(recentBooks.size())) {
+      selectorIndex = static_cast<size_t>(tappedIndex);
+      LOG_DBG("RBA", "Tapped recent book: %s", recentBooks[selectorIndex].path.c_str());
+      onSelectBook(recentBooks[selectorIndex].path);
+      return;
+    }
+  }
+
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (!recentBooks.empty() && selectorIndex < static_cast<int>(recentBooks.size())) {
       LOG_DBG("RBA", "Selected recent book: %s", recentBooks[selectorIndex].path.c_str());

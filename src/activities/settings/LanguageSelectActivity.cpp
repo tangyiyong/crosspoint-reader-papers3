@@ -27,6 +27,23 @@ void LanguageSelectActivity::onEnter() {
 void LanguageSelectActivity::onExit() { Activity::onExit(); }
 
 void LanguageSelectActivity::loop() {
+  const auto pageWidth = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
+  auto metrics = UITheme::getInstance().getMetrics();
+  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
+
+  if (mappedInput.wasContentTapped()) {
+    const int tappedIndex = UITheme::getInstance().hitTestListItem(
+        Rect{0, contentTop, pageWidth, contentHeight}, totalItems, selectedIndex, false, mappedInput.getTouchX(),
+        mappedInput.getTouchY());
+    if (tappedIndex >= 0) {
+      selectedIndex = tappedIndex;
+      handleSelection();
+      return;
+    }
+  }
+
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
     onBack();
     return;

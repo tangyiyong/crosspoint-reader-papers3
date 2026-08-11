@@ -37,6 +37,7 @@ class MappedInputManager {
     return gpio.wasReleased(HalGPIO::BTN_LEFT) || gpio.wasReleased(HalGPIO::BTN_CONFIRM) ||
            gpio.wasReleased(HalGPIO::BTN_RIGHT);
   }
+  bool wasContentTapped() const { return gpio.wasContentTapReleased(); }
   bool wasPressed(Button button) const;
   bool wasReleased(Button button) const;
   bool isPressed(Button button) const;

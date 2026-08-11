@@ -67,6 +67,34 @@ void EpubReaderMenuActivity::onEnter() {
 void EpubReaderMenuActivity::onExit() { Activity::onExit(); }
 
 void EpubReaderMenuActivity::loop() {
+  if (mappedInput.wasContentTapped() && !menuItems.empty()) {
+    const auto pageWidth = renderer.getScreenWidth();
+    const auto orientation = renderer.getOrientation();
+    const bool isLandscapeCw = orientation == GfxRenderer::Orientation::LandscapeClockwise;
+    const bool isLandscapeCcw = orientation == GfxRenderer::Orientation::LandscapeCounterClockwise;
+    const bool isPortraitInverted = orientation == GfxRenderer::Orientation::PortraitInverted;
+    const int hintGutterWidth = (isLandscapeCw || isLandscapeCcw) ? 30 : 0;
+    const int contentX = isLandscapeCw ? hintGutterWidth : 0;
+    const int contentWidth = pageWidth - hintGutterWidth;
+    const int contentY = isPortraitInverted ? 50 : 0;
+    const int startY = 85 + contentY;
+#if CROSSPOINT_PAPERS3
+    constexpr int lineHeight = 75;
+#else
+    constexpr int lineHeight = 30;
+#endif
+    const int touchX = mappedInput.getTouchX();
+    const int touchY = mappedInput.getTouchY();
+    if (touchX >= contentX && touchX < contentX + contentWidth && touchY >= startY) {
+      const int tappedIndex = (touchY - startY) / lineHeight;
+      if (tappedIndex >= 0 && tappedIndex < static_cast<int>(menuItems.size())) {
+        selectedIndex = tappedIndex;
+        activateSelectedItem();
+        return;
+      }
+    }
+  }
+
   // Handle navigation
   buttonNavigator.onNext([this] {
     selectedIndex = ButtonNavigator::nextIndex(selectedIndex, static_cast<int>(menuItems.size()));
@@ -79,36 +107,7 @@ void EpubReaderMenuActivity::loop() {
   });
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    const auto selectedAction = menuItems[selectedIndex].action;
-    if (selectedAction == MenuAction::ROTATE_SCREEN) {
-      // Cycle orientation preview locally; actual rotation happens on menu exit.
-#if CROSSPOINT_PAPERS3
-      pendingOrientation = CrossPointSettings::nextPaperS3Orientation(pendingOrientation);
-#else
-      pendingOrientation = (pendingOrientation + 1) % orientationLabels.size();
-#endif
-      requestUpdate();
-      return;
-    }
-
-    if (selectedAction == MenuAction::AUTO_PAGE_TURN) {
-      selectedPageTurnOption = (selectedPageTurnOption + 1) % pageTurnLabels.size();
-      requestUpdate();
-      return;
-    }
-
-    if (selectedAction == MenuAction::COLOR_MODE) {
-      SETTINGS.colorMode = SETTINGS.colorMode == CrossPointSettings::COLOR_MODE::DARK_MODE
-                               ? CrossPointSettings::COLOR_MODE::LIGHT_MODE
-                               : CrossPointSettings::COLOR_MODE::DARK_MODE;
-      SETTINGS.saveToFile();
-      renderer.setDarkMode(SETTINGS.colorMode == CrossPointSettings::COLOR_MODE::DARK_MODE);
-      requestUpdate();
-      return;
-    }
-
-    setResult(MenuResult{static_cast<int>(selectedAction), pendingOrientation, selectedPageTurnOption});
-    finish();
+    activateSelectedItem();
     return;
   } else if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     ActivityResult result;
@@ -118,6 +117,39 @@ void EpubReaderMenuActivity::loop() {
     finish();
     return;
   }
+}
+
+void EpubReaderMenuActivity::activateSelectedItem() {
+  const auto selectedAction = menuItems[selectedIndex].action;
+  if (selectedAction == MenuAction::ROTATE_SCREEN) {
+    // Cycle orientation preview locally; actual rotation happens on menu exit.
+#if CROSSPOINT_PAPERS3
+    pendingOrientation = CrossPointSettings::nextPaperS3Orientation(pendingOrientation);
+#else
+    pendingOrientation = (pendingOrientation + 1) % orientationLabels.size();
+#endif
+    requestUpdate();
+    return;
+  }
+
+  if (selectedAction == MenuAction::AUTO_PAGE_TURN) {
+    selectedPageTurnOption = (selectedPageTurnOption + 1) % pageTurnLabels.size();
+    requestUpdate();
+    return;
+  }
+
+  if (selectedAction == MenuAction::COLOR_MODE) {
+    SETTINGS.colorMode = SETTINGS.colorMode == CrossPointSettings::COLOR_MODE::DARK_MODE
+                             ? CrossPointSettings::COLOR_MODE::LIGHT_MODE
+                             : CrossPointSettings::COLOR_MODE::DARK_MODE;
+    SETTINGS.saveToFile();
+    renderer.setDarkMode(SETTINGS.colorMode == CrossPointSettings::COLOR_MODE::DARK_MODE);
+    requestUpdate();
+    return;
+  }
+
+  setResult(MenuResult{static_cast<int>(selectedAction), pendingOrientation, selectedPageTurnOption});
+  finish();
 }
 
 void EpubReaderMenuActivity::render(RenderLock&&) {

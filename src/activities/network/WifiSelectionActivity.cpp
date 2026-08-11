@@ -53,7 +53,7 @@ void WifiSelectionActivity::onEnter() {
   if (allowAutoConnect) {
     const std::string lastSsid = WIFI_STORE.getLastConnectedSsid();
     if (!lastSsid.empty()) {
-      const auto* cred = WIFI_STORE.findCredential(lastSsid);
+      const auto cred = WIFI_STORE.findCredential(lastSsid);
       if (cred) {
         LOG_DBG("WIFI", "Attempting to auto-connect to %s", lastSsid.c_str());
         selectedSSID = cred->ssid;
@@ -174,7 +174,7 @@ void WifiSelectionActivity::selectNetwork(const int index) {
   autoConnecting = false;
 
   // Check if we have saved credentials for this network
-  const auto* savedCred = WIFI_STORE.findCredential(selectedSSID);
+  const auto savedCred = WIFI_STORE.findCredential(selectedSSID);
   if (savedCred && !savedCred->password.empty()) {
     // Use saved password - connect directly
     enteredPassword = savedCred->password;
@@ -416,6 +416,23 @@ void WifiSelectionActivity::loop() {
 
   // Handle network list state
   if (state == WifiSelectionState::NETWORK_LIST) {
+    const auto& metrics = UITheme::getInstance().getMetrics();
+    const auto pageWidth = renderer.getScreenWidth();
+    const auto pageHeight = renderer.getScreenHeight();
+    const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.verticalSpacing;
+    const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
+
+    if (mappedInput.wasContentTapped()) {
+      const int tappedIndex = UITheme::getInstance().hitTestListItem(
+          Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(networks.size()), selectedNetworkIndex, false,
+          mappedInput.getTouchX(), mappedInput.getTouchY());
+      if (tappedIndex >= 0) {
+        selectedNetworkIndex = tappedIndex;
+        selectNetwork(selectedNetworkIndex);
+        return;
+      }
+    }
+
     // Check for Back button to exit (cancel)
     if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
       onComplete(false);

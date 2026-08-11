@@ -21,6 +21,7 @@ class HalGPIO {
   // Raw touch coordinate access for tap-to-select navigation
   int16_t getLastTouchX() const;
   int16_t getLastTouchY() const;
+  bool wasContentTapReleased() const { return contentTapReleased; }
 
   // Footer nav bar: taps in the bottom footerHeight pixels map to
   // Back / Confirm / Up / Down instead of the normal 3-zone split.
@@ -69,6 +70,7 @@ class HalGPIO {
   uint8_t lastPressedButton = 0xFF;
   int16_t lastTouchX = -1;
   int16_t lastTouchY = -1;
+  bool contentTapReleased = false;
 
   // Gesture tracking: swipe detection + multi-finger
   bool touchActive = false;                       // A finger is currently down

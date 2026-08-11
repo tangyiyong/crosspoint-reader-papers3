@@ -29,6 +29,23 @@ void FontSelectActivity::onEnter() {
 }
 
 void FontSelectActivity::loop() {
+  const auto pageWidth = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
+  const auto metrics = UITheme::getInstance().getMetrics();
+  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
+
+  if (mappedInput.wasContentTapped()) {
+    const int tappedIndex = UITheme::getInstance().hitTestListItem(
+        Rect{0, contentTop, pageWidth, contentHeight}, totalItems, selectedIndex, false, mappedInput.getTouchX(),
+        mappedInput.getTouchY());
+    if (tappedIndex >= 0) {
+      selectedIndex = tappedIndex;
+      applySelection();
+      return;
+    }
+  }
+
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
     finish();
     return;

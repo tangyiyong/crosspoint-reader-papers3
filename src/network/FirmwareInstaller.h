@@ -11,6 +11,7 @@ class FirmwareInstaller {
     NO_PARTITION,
     IMAGE_TOO_LARGE,
     INVALID_IMAGE,
+    WRONG_DEVICE,
     READ_ERROR,
     OTA_BEGIN_FAILED,
     OTA_WRITE_FAILED,

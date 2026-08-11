@@ -42,6 +42,23 @@ void ButtonRemapActivity::loop() {
     return;
   }
 
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const auto pageWidth = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
+  const int topOffset = metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.verticalSpacing;
+  const int contentHeight = pageHeight - topOffset - metrics.buttonHintsHeight - metrics.verticalSpacing;
+
+  if (mappedInput.wasContentTapped()) {
+    const int tappedIndex = UITheme::getInstance().hitTestListItem(
+        Rect{0, topOffset, pageWidth, contentHeight}, kRoleCount, currentStep, false, mappedInput.getTouchX(),
+        mappedInput.getTouchY());
+    if (tappedIndex >= 0) {
+      currentStep = static_cast<uint8_t>(tappedIndex);
+      requestUpdate();
+      return;
+    }
+  }
+
   // Side buttons:
   // - Up: reset mapping to defaults and exit.
   // - Down: cancel without saving.

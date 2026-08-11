@@ -71,5 +71,6 @@ class EpubReaderMenuActivity final : public Activity {
   int totalPages = 0;
   int bookProgressPercent = 0;
 
+  void activateSelectedItem();
   std::string getMenuItemValue(MenuAction action) const;
 };

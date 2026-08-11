@@ -52,6 +52,43 @@ void EpubReaderChapterSelectionActivity::loop() {
   const int totalItems = getTotalItems();
 
 #if CROSSPOINT_PAPERS3
+  if (mappedInput.wasContentTapped()) {
+    const auto pageWidth = renderer.getScreenWidth();
+    const auto orientation = renderer.getOrientation();
+    const bool isLandscapeCw = orientation == GfxRenderer::Orientation::LandscapeClockwise;
+    const bool isLandscapeCcw = orientation == GfxRenderer::Orientation::LandscapeCounterClockwise;
+    const bool isPortraitInverted = orientation == GfxRenderer::Orientation::PortraitInverted;
+    const int hintGutterWidth = (isLandscapeCw || isLandscapeCcw) ? 30 : 0;
+    const int contentX = isLandscapeCw ? hintGutterWidth : 0;
+    const int contentWidth = pageWidth - hintGutterWidth;
+    const int contentY = isPortraitInverted ? 50 : 0;
+#if CROSSPOINT_PAPERS3
+    constexpr int lineHeight = 75;
+#else
+    constexpr int lineHeight = 30;
+#endif
+    const int startY = 60 + contentY;
+    const int touchX = mappedInput.getTouchX();
+    const int touchY = mappedInput.getTouchY();
+    if (touchX >= contentX && touchX < contentX + contentWidth && touchY >= startY) {
+      const int row = (touchY - startY) / lineHeight;
+      const int tappedIndex = (selectorIndex / pageItems * pageItems) + row;
+      if (row >= 0 && row < pageItems && tappedIndex >= 0 && tappedIndex < totalItems) {
+        selectorIndex = tappedIndex;
+        const auto newSpineIndex = epub->getSpineIndexForTocIndex(selectorIndex);
+        if (newSpineIndex == -1) {
+          ActivityResult result;
+          result.isCancelled = true;
+          setResult(std::move(result));
+        } else {
+          setResult(ChapterResult{newSpineIndex});
+        }
+        finish();
+        return;
+      }
+    }
+  }
+
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     const auto newSpineIndex = epub->getSpineIndexForTocIndex(selectorIndex);
     if (newSpineIndex == -1) {

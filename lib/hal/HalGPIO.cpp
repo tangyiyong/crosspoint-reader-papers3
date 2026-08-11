@@ -111,6 +111,7 @@ int HalGPIO::touchZoneToButton(int16_t touchX, int16_t touchY) const {
 void HalGPIO::update() {
   previousState = currentState;
   currentState = 0;
+  contentTapReleased = false;
 
   // During cooldown (after activity transition), drain touch events but don't act on them
   if (millis() < cooldownUntil) {
@@ -157,6 +158,8 @@ void HalGPIO::update() {
       int btn = touchZoneToButton(touchStartX, touchStartY);
       if (btn >= 0 && btn < HALGPIO_NUM_BUTTONS) {
         currentState |= (1 << btn);
+      } else {
+        contentTapReleased = true;
       }
       LOG_DBG("TOUCH", "tap at (%d,%d) btn=%d (footer mode)", touchStartX, touchStartY, btn);
     } else if (sawMultiTouch) {
@@ -215,6 +218,7 @@ void HalGPIO::clearState() {
   currentState = 0;
   pressStartTime = 0;
   lastHeldTime = 0;
+  contentTapReleased = false;
   touchActive = false;
   sawMultiTouch = false;
   cooldownUntil = millis() + 200;  // Suppress input for 200ms after activity transition

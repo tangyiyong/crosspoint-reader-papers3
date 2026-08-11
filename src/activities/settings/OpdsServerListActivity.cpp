@@ -27,6 +27,24 @@ void OpdsServerListActivity::onEnter() {
 void OpdsServerListActivity::onExit() { Activity::onExit(); }
 
 void OpdsServerListActivity::loop() {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const auto pageWidth = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
+  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
+  const int itemCount = getItemCount();
+
+  if (mappedInput.wasContentTapped()) {
+    const int tappedIndex = UITheme::getInstance().hitTestListItem(
+        Rect{0, contentTop, pageWidth, contentHeight}, itemCount, selectedIndex, true, mappedInput.getTouchX(),
+        mappedInput.getTouchY());
+    if (tappedIndex >= 0) {
+      selectedIndex = tappedIndex;
+      handleSelection();
+      return;
+    }
+  }
+
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
     pickerMode ? activityManager.goHome() : finish();
     return;
@@ -37,7 +55,6 @@ void OpdsServerListActivity::loop() {
     return;
   }
 
-  const int itemCount = getItemCount();
   if (itemCount <= 0) {
     return;
   }

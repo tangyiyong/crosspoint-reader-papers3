@@ -67,6 +67,61 @@ int UITheme::getNumberOfItemsPerPage(const GfxRenderer& renderer, bool hasHeader
   return availableHeight / rowHeight;
 }
 
+int UITheme::hitTestListItem(const Rect rect, const int itemCount, const int selectedIndex, const bool hasSubtitle,
+                             const int touchX, const int touchY) const {
+  if (itemCount <= 0 || touchX < rect.x || touchX >= rect.x + rect.width || touchY < rect.y ||
+      touchY >= rect.y + rect.height) {
+    return -1;
+  }
+
+  const int rowHeight = hasSubtitle ? currentMetrics->listWithSubtitleRowHeight : currentMetrics->listRowHeight;
+  const int pageItems = rowHeight > 0 ? rect.height / rowHeight : 0;
+  if (pageItems <= 0) {
+    return -1;
+  }
+
+  const int row = (touchY - rect.y) / rowHeight;
+  if (row < 0 || row >= pageItems) {
+    return -1;
+  }
+
+  const int normalizedSelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+  const int pageStartIndex = (normalizedSelectedIndex / pageItems) * pageItems;
+  const int itemIndex = pageStartIndex + row;
+  return itemIndex < itemCount ? itemIndex : -1;
+}
+
+int UITheme::hitTestButtonMenu(const Rect rect, const int buttonCount, const int touchX, const int touchY) const {
+  if (buttonCount <= 0 || touchX < rect.x || touchX >= rect.x + rect.width || touchY < rect.y ||
+      touchY >= rect.y + rect.height) {
+    return -1;
+  }
+
+  const int rowStride = currentMetrics->menuRowHeight + currentMetrics->menuSpacing;
+  if (rowStride <= 0) {
+    return -1;
+  }
+
+  const int localY = touchY - rect.y - currentMetrics->verticalSpacing;
+  if (localY < 0) {
+    return -1;
+  }
+
+  const int index = localY / rowStride;
+  const int rowOffset = localY % rowStride;
+  if (index < 0 || index >= buttonCount || rowOffset >= currentMetrics->menuRowHeight) {
+    return -1;
+  }
+
+  const int contentLeft = rect.x + currentMetrics->contentSidePadding;
+  const int contentRight = rect.x + rect.width - currentMetrics->contentSidePadding;
+  if (touchX < contentLeft || touchX >= contentRight) {
+    return -1;
+  }
+
+  return index;
+}
+
 std::string UITheme::getCoverThumbPath(std::string coverBmpPath, int coverHeight) {
   size_t pos = coverBmpPath.find("[HEIGHT]", 0);
   if (pos != std::string::npos) {

@@ -61,6 +61,8 @@ const char* SdFirmwareUpdateActivity::errorMessageFor(const SdFirmwareUpdater::E
   switch (error) {
     case SdFirmwareUpdater::Error::INVALID_IMAGE:
       return tr(STR_SD_FIRMWARE_ERR_INVALID);
+    case SdFirmwareUpdater::Error::WRONG_DEVICE:
+      return tr(STR_SD_FIRMWARE_ERR_WRONG_DEVICE);
     case SdFirmwareUpdater::Error::READ_ERROR:
       return tr(STR_SD_FIRMWARE_ERR_READ);
     case SdFirmwareUpdater::Error::IMAGE_TOO_LARGE:
@@ -163,6 +165,30 @@ void SdFirmwareUpdateActivity::loop() {
   }
 
   if (state == SELECT_FILE) {
+    const auto& metrics = UITheme::getInstance().getMetrics();
+    const auto pageWidth = renderer.getScreenWidth();
+    const auto pageHeight = renderer.getScreenHeight();
+    const auto height = renderer.getLineHeight(UI_10_FONT_ID);
+    const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+    const int listTop = contentTop + height + metrics.verticalSpacing;
+    const int listHeight = pageHeight - listTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
+
+    if (mappedInput.wasContentTapped()) {
+      const int tappedIndex = UITheme::getInstance().hitTestListItem(
+          Rect{0, listTop, pageWidth, listHeight > 0 ? listHeight : 0}, static_cast<int>(candidateCount),
+          selectedIndex, false, mappedInput.getTouchX(), mappedInput.getTouchY());
+      if (tappedIndex >= 0) {
+        selectedIndex = tappedIndex;
+        selectCandidate(selectedIndex);
+        {
+          RenderLock lock(*this);
+          state = CONFIRM;
+        }
+        requestUpdate();
+        return;
+      }
+    }
+
     if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
       finish();
       return;

@@ -113,6 +113,24 @@ void StatusBarSettingsActivity::onEnter() {
 void StatusBarSettingsActivity::onExit() { Activity::onExit(); }
 
 void StatusBarSettingsActivity::loop() {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const auto pageWidth = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
+  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
+
+  if (mappedInput.wasContentTapped()) {
+    const int tappedIndex = UITheme::getInstance().hitTestListItem(
+        Rect{0, contentTop, pageWidth, contentHeight}, visibleItemCount, static_cast<int>(selectedIndex), false,
+        mappedInput.getTouchX(), mappedInput.getTouchY());
+    if (tappedIndex >= 0) {
+      selectedIndex = tappedIndex;
+      handleSelection();
+      requestUpdate();
+      return;
+    }
+  }
+
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
     finish();
     return;

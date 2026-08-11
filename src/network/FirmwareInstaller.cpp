@@ -23,7 +23,7 @@ FirmwareInstaller::Error FirmwareInstaller::validateImageHeader(HalFile& file) {
 
   if (imageHeader.chip_id != ESP_CHIP_ID_ESP32S3) {
     LOG_ERR("FW_INSTALL", "Invalid chip_id: %u (expected ESP32-S3)", imageHeader.chip_id);
-    return Error::INVALID_IMAGE;
+    return Error::WRONG_DEVICE;
   }
 
   if (!file.seekSet(0)) {

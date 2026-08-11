@@ -60,6 +60,38 @@ void XtcReaderChapterSelectionActivity::loop() {
   const int totalItems = static_cast<int>(xtc->getChapters().size());
 
 #if CROSSPOINT_PAPERS3
+  if (mappedInput.wasContentTapped()) {
+    const int pageItems = getPageItems();
+    const auto pageWidth = renderer.getScreenWidth();
+    const auto orientation = renderer.getOrientation();
+    const bool isLandscapeCw = orientation == GfxRenderer::Orientation::LandscapeClockwise;
+    const bool isLandscapeCcw = orientation == GfxRenderer::Orientation::LandscapeCounterClockwise;
+    const bool isPortraitInverted = orientation == GfxRenderer::Orientation::PortraitInverted;
+    const int hintGutterWidth = (isLandscapeCw || isLandscapeCcw) ? 30 : 0;
+    const int contentX = isLandscapeCw ? hintGutterWidth : 0;
+    const int contentWidth = pageWidth - hintGutterWidth;
+    const int contentY = isPortraitInverted ? 50 : 0;
+#if CROSSPOINT_PAPERS3
+    constexpr int lineHeight = 75;
+#else
+    constexpr int lineHeight = 30;
+#endif
+    const int startY = 60 + contentY;
+    const int touchX = mappedInput.getTouchX();
+    const int touchY = mappedInput.getTouchY();
+    if (touchX >= contentX && touchX < contentX + contentWidth && touchY >= startY) {
+      const int row = (touchY - startY) / lineHeight;
+      const int tappedIndex = (selectorIndex / pageItems * pageItems) + row;
+      const auto& chapters = xtc->getChapters();
+      if (row >= 0 && row < pageItems && tappedIndex >= 0 && tappedIndex < static_cast<int>(chapters.size())) {
+        selectorIndex = tappedIndex;
+        setResult(PageResult{chapters[selectorIndex].startPage});
+        finish();
+        return;
+      }
+    }
+  }
+
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     const auto& chapters = xtc->getChapters();
     if (!chapters.empty() && selectorIndex >= 0 && selectorIndex < static_cast<int>(chapters.size())) {

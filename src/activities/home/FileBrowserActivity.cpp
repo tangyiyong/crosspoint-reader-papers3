@@ -141,6 +141,25 @@ void FileBrowserActivity::clearFileMetadata(const std::string& fullPath) {
   }
 }
 
+void FileBrowserActivity::openSelectedEntry() {
+  if (files.empty()) return;
+
+  const std::string& entry = files[selectorIndex];
+  const bool isDirectory = (entry.back() == '/');
+
+  if (basepath.back() != '/') basepath += "/";
+
+  if (isDirectory) {
+    basepath += entry.substr(0, entry.length() - 1);
+    loadFiles();
+    selectorIndex = 0;
+    requestUpdate();
+    return;
+  }
+
+  onSelectBook(basepath + entry);
+}
+
 void FileBrowserActivity::loop() {
   // Long press BACK (1s+) goes to root folder
   // but Long press BACK (1s+) from ReaderActivity sends us here with the MappedInput already set.
@@ -162,6 +181,23 @@ void FileBrowserActivity::loop() {
   const int pathReserved = renderer.getLineHeight(SMALL_FONT_ID) + UITheme::getInstance().getMetrics().verticalSpacing;
   const int pageItems =
       UITheme::getInstance().getNumberOfItemsPerPage(renderer, true, false, true, false, pathReserved);
+  const auto pageWidth = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  const int contentHeight =
+      pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing - pathReserved;
+
+  if (mappedInput.wasContentTapped()) {
+    const int tappedIndex = UITheme::getInstance().hitTestListItem(
+        Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(files.size()), static_cast<int>(selectorIndex),
+        false, mappedInput.getTouchX(), mappedInput.getTouchY());
+    if (tappedIndex >= 0) {
+      selectorIndex = static_cast<size_t>(tappedIndex);
+      openSelectedEntry();
+      return;
+    }
+  }
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (files.empty()) return;
@@ -203,16 +239,7 @@ void FileBrowserActivity::loop() {
       return;
     } else {
       // --- SHORT PRESS ACTION: OPEN/NAVIGATE ---
-      if (basepath.back() != '/') basepath += "/";
-
-      if (isDirectory) {
-        basepath += entry.substr(0, entry.length() - 1);
-        loadFiles();
-        selectorIndex = 0;
-        requestUpdate();
-      } else {
-        onSelectBook(basepath + entry);
-      }
+      openSelectedEntry();
     }
     return;
   }

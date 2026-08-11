@@ -28,6 +28,23 @@ void KOReaderSettingsActivity::onEnter() {
 void KOReaderSettingsActivity::onExit() { Activity::onExit(); }
 
 void KOReaderSettingsActivity::loop() {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const auto pageWidth = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
+  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
+
+  if (mappedInput.wasContentTapped()) {
+    const int tappedIndex = UITheme::getInstance().hitTestListItem(
+        Rect{0, contentTop, pageWidth, contentHeight}, MENU_ITEMS, static_cast<int>(selectedIndex), false,
+        mappedInput.getTouchX(), mappedInput.getTouchY());
+    if (tappedIndex >= 0) {
+      selectedIndex = static_cast<size_t>(tappedIndex);
+      handleSelection();
+      return;
+    }
+  }
+
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
     finish();
     return;

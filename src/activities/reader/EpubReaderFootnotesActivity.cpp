@@ -18,6 +18,36 @@ void EpubReaderFootnotesActivity::onEnter() {
 void EpubReaderFootnotesActivity::onExit() { Activity::onExit(); }
 
 void EpubReaderFootnotesActivity::loop() {
+  if (mappedInput.wasContentTapped() && !footnotes.empty()) {
+    const auto pageWidth = renderer.getScreenWidth();
+    const auto orientation = renderer.getOrientation();
+    const bool isLandscapeCw = orientation == GfxRenderer::Orientation::LandscapeClockwise;
+    const bool isLandscapeCcw = orientation == GfxRenderer::Orientation::LandscapeCounterClockwise;
+    const bool isPortraitInverted = orientation == GfxRenderer::Orientation::PortraitInverted;
+    const int hintGutterWidth = (isLandscapeCw || isLandscapeCcw) ? 30 : 0;
+    const int contentX = isLandscapeCw ? hintGutterWidth : 0;
+    const int contentWidth = pageWidth - hintGutterWidth;
+    const int contentY = isPortraitInverted ? 50 : 0;
+#if CROSSPOINT_PAPERS3
+    constexpr int lineHeight = 75;
+#else
+    constexpr int lineHeight = 36;
+#endif
+    const int startY = 60 + contentY;
+    const int touchX = mappedInput.getTouchX();
+    const int touchY = mappedInput.getTouchY();
+    if (touchX >= contentX && touchX < contentX + contentWidth && touchY >= startY) {
+      const int row = (touchY - startY) / lineHeight;
+      const int tappedIndex = scrollOffset + row;
+      if (row >= 0 && tappedIndex >= 0 && tappedIndex < static_cast<int>(footnotes.size())) {
+        selectedIndex = tappedIndex;
+        setResult(FootnoteResult{footnotes[selectedIndex].href});
+        finish();
+        return;
+      }
+    }
+  }
+
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     ActivityResult result;
     result.isCancelled = true;

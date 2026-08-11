@@ -1,10 +1,18 @@
 #pragma once
+#include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
 struct WifiCredential {
   std::string ssid;
   std::string password;  // Plaintext in memory; obfuscated with hardware key on disk
+};
+
+struct WifiCredentialSummary {
+  std::string ssid;
+  bool hasPassword = false;
+  bool isLastConnected = false;
 };
 
 class WifiCredentialStore;
@@ -24,6 +32,7 @@ class WifiCredentialStore {
   static WifiCredentialStore instance;
   std::vector<WifiCredential> credentials;
   std::string lastConnectedSsid;
+  mutable std::mutex credentialMutex;
 
   static constexpr size_t MAX_NETWORKS = 8;
 
@@ -31,6 +40,7 @@ class WifiCredentialStore {
   WifiCredentialStore() = default;
 
   bool loadFromBinaryFile();
+  void replaceLoadedCredentials(std::string lastSsid, std::vector<WifiCredential> loadedCredentials);
 
   friend bool JsonSettingsIO::saveWifi(const WifiCredentialStore&, const char*);
   friend bool JsonSettingsIO::loadWifi(WifiCredentialStore&, const char*, bool*);
@@ -50,17 +60,22 @@ class WifiCredentialStore {
   // Credential management
   bool addCredential(const std::string& ssid, const std::string& password);
   bool removeCredential(const std::string& ssid);
-  const WifiCredential* findCredential(const std::string& ssid) const;
+  std::optional<WifiCredential> findCredential(const std::string& ssid) const;
+  std::optional<WifiCredential> getCredentialAt(size_t index) const;
+  std::optional<std::string> getSsidAt(size_t index) const;
 
-  // Get all stored credentials (for UI display)
-  const std::vector<WifiCredential>& getCredentials() const { return credentials; }
+  // Snapshot stored credentials. The store contains at most MAX_NETWORKS entries,
+  // so this bounded copy avoids exposing internal strings across tasks.
+  std::vector<WifiCredential> getCredentialsSnapshot() const;
+  std::vector<WifiCredentialSummary> getCredentialSummaries() const;
+  size_t getCredentialCount() const;
 
   // Check if a network is saved
   bool hasSavedCredential(const std::string& ssid) const;
 
   // Last connected network
   void setLastConnectedSsid(const std::string& ssid);
-  const std::string& getLastConnectedSsid() const;
+  std::string getLastConnectedSsid() const;
   void clearLastConnectedSsid();
 
   // Clear all credentials
