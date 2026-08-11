@@ -41,11 +41,25 @@ void OpdsSettingsActivity::loop() {
   const auto pageHeight = renderer.getScreenHeight();
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing + metrics.tabBarHeight;
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
+  const int menuItems = getMenuItemCount();
+  const Rect listRect{0, contentTop, pageWidth, contentHeight};
+  const int pageItems = UITheme::getInstance().getListItemsPerPage(listRect, false);
+
+  if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+    if (pageItems > 0 && menuItems > pageItems) {
+      selectedIndex = static_cast<size_t>(
+          mappedInput.wasContentSwipedUp()
+              ? ButtonNavigator::nextPageIndex(static_cast<int>(selectedIndex), menuItems, pageItems)
+              : ButtonNavigator::previousPageIndex(static_cast<int>(selectedIndex), menuItems, pageItems));
+      requestUpdate();
+      return;
+    }
+  }
 
   if (mappedInput.wasContentTapped()) {
-    const int tappedIndex = UITheme::getInstance().hitTestListItem(
-        Rect{0, contentTop, pageWidth, contentHeight}, getMenuItemCount(), static_cast<int>(selectedIndex), false,
-        mappedInput.getTouchX(), mappedInput.getTouchY());
+    const int tappedIndex =
+        UITheme::getInstance().hitTestListItem(listRect, menuItems, static_cast<int>(selectedIndex), false,
+                                               mappedInput.getTouchX(), mappedInput.getTouchY());
     if (tappedIndex >= 0) {
       selectedIndex = static_cast<size_t>(tappedIndex);
       handleSelection();
@@ -63,7 +77,6 @@ void OpdsSettingsActivity::loop() {
     return;
   }
 
-  const int menuItems = getMenuItemCount();
   buttonNavigator.onNext([this, menuItems] {
     selectedIndex = (selectedIndex + 1) % static_cast<size_t>(menuItems);
     requestUpdate();

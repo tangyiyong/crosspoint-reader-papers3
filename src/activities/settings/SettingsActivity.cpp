@@ -23,6 +23,7 @@
 #include "SdFirmwareUpdateActivity.h"
 #include "SettingsList.h"
 #include "StatusBarSettingsActivity.h"
+#include "UsbMassStorageActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -66,6 +67,7 @@ void SettingsActivity::onEnter() {
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_INSTALL_FIRMWARE_SD, SettingAction::InstallFirmwareFromSd));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_USB_MASS_STORAGE, SettingAction::UsbMassStorage));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_LANGUAGE, SettingAction::Language));
 #if CROSSPOINT_PAPERS3
   readerSettings.insert(readerSettings.begin(),
@@ -96,6 +98,24 @@ void SettingsActivity::loop() {
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
   const auto& metrics = UITheme::getInstance().getMetrics();
+  const Rect listRect{0, metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.verticalSpacing,
+                      pageWidth,
+                      pageHeight - (metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight +
+                                    metrics.buttonHintsHeight + metrics.verticalSpacing * 2)};
+  const int pageItems = UITheme::getInstance().getListItemsPerPage(listRect, false);
+
+  if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+    if (pageItems > 0 && settingsCount > pageItems) {
+      const int currentSetting = selectedSettingIndex > 0 ? selectedSettingIndex - 1 : 0;
+      selectedSettingIndex =
+          (mappedInput.wasContentSwipedUp()
+               ? ButtonNavigator::nextPageIndex(currentSetting, settingsCount, pageItems)
+               : ButtonNavigator::previousPageIndex(currentSetting, settingsCount, pageItems)) +
+          1;
+      requestUpdate();
+      return;
+    }
+  }
 
   if (mappedInput.wasContentTapped()) {
     const Rect tabRect{0, metrics.topPadding + metrics.headerHeight, pageWidth, metrics.tabBarHeight};
@@ -111,11 +131,6 @@ void SettingsActivity::loop() {
         requestUpdate();
       }
     } else {
-      const Rect listRect{0, metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.verticalSpacing,
-                          pageWidth,
-                          pageHeight -
-                              (metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight +
-                               metrics.buttonHintsHeight + metrics.verticalSpacing * 2)};
       const int tappedSetting = UITheme::getInstance().hitTestListItem(listRect, settingsCount, selectedSettingIndex - 1,
                                                                        false, touchX, touchY);
       if (tappedSetting >= 0) {
@@ -272,6 +287,9 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       case SettingAction::InstallFirmwareFromSd:
         startActivityForResult(std::make_unique<SdFirmwareUpdateActivity>(renderer, mappedInput), resultHandler);
+        break;
+      case SettingAction::UsbMassStorage:
+        startActivityForResult(std::make_unique<UsbMassStorageActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::Language:
         startActivityForResult(std::make_unique<LanguageSelectActivity>(renderer, mappedInput), resultHandler);

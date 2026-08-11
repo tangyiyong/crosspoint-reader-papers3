@@ -33,11 +33,24 @@ void KOReaderSettingsActivity::loop() {
   const auto pageHeight = renderer.getScreenHeight();
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
+  const Rect listRect{0, contentTop, pageWidth, contentHeight};
+  const int pageItems = UITheme::getInstance().getListItemsPerPage(listRect, false);
+
+  if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+    if (pageItems > 0 && MENU_ITEMS > pageItems) {
+      selectedIndex = static_cast<size_t>(
+          mappedInput.wasContentSwipedUp()
+              ? ButtonNavigator::nextPageIndex(static_cast<int>(selectedIndex), MENU_ITEMS, pageItems)
+              : ButtonNavigator::previousPageIndex(static_cast<int>(selectedIndex), MENU_ITEMS, pageItems));
+      requestUpdate();
+      return;
+    }
+  }
 
   if (mappedInput.wasContentTapped()) {
-    const int tappedIndex = UITheme::getInstance().hitTestListItem(
-        Rect{0, contentTop, pageWidth, contentHeight}, MENU_ITEMS, static_cast<int>(selectedIndex), false,
-        mappedInput.getTouchX(), mappedInput.getTouchY());
+    const int tappedIndex =
+        UITheme::getInstance().hitTestListItem(listRect, MENU_ITEMS, static_cast<int>(selectedIndex), false,
+                                               mappedInput.getTouchX(), mappedInput.getTouchY());
     if (tappedIndex >= 0) {
       selectedIndex = static_cast<size_t>(tappedIndex);
       handleSelection();

@@ -112,6 +112,15 @@ void HalGPIO::update() {
   previousState = currentState;
   currentState = 0;
   contentTapReleased = false;
+  contentSwipeUpReleased = false;
+  contentSwipeDownReleased = false;
+  readerSwipeLeftReleased = false;
+  readerSwipeRightReleased = false;
+  readerSwipeLeftFromRightEdgeReleased = false;
+  readerSwipeRightFromLeftEdgeReleased = false;
+  readerSwipeDownFromTopEdgeReleased = false;
+  readerSwipeUpFromBottomEdgeReleased = false;
+  readerTapTopReleased = false;
 
   // During cooldown (after activity transition), drain touch events but don't act on them
   if (millis() < cooldownUntil) {
@@ -140,10 +149,30 @@ void HalGPIO::update() {
       touchStartY = lastTouchY;
     }
 
-    // While finger is down, report the zone button as pressed (for held-time detection).
-    // Use touchStart (not current) position so the zone stays locked to the initial tap
-    // intent and doesn't bounce across zone boundaries when the finger drifts slightly.
-    int btn = touchZoneToButton(touchStartX, touchStartY);
+    // While finger is down, report the zone button as pressed for held-time detection.
+    // Reader edge gestures must not publish their start-zone button while held, or a
+    // single edge swipe can turn a page on press and then run the edge action on release.
+    bool suppressHeldZoneButton = false;
+    if (footerHeight == 0 && !sawMultiTouch) {
+      int16_t startLogicalX = 0;
+      int16_t startLogicalY = 0;
+      int16_t currentLogicalX = 0;
+      int16_t currentLogicalY = 0;
+      transformTouchPoint(touchStartX, touchStartY, &startLogicalX, &startLogicalY);
+      transformTouchPoint(lastTouchX, lastTouchY, &currentLogicalX, &currentLogicalY);
+      int16_t logicalW = 0;
+      int16_t logicalH = 0;
+      getLogicalDimensions(touchOrientation, &logicalW, &logicalH);
+      const int16_t edgeWidth = logicalW / 8;
+      const int16_t edgeHeight = logicalH / 8;
+      const bool edgeStart = startLogicalX <= edgeWidth || startLogicalX >= logicalW - edgeWidth ||
+                             startLogicalY <= edgeHeight || startLogicalY >= logicalH - edgeHeight;
+      const bool swipeMovement = abs(currentLogicalX - startLogicalX) >= SWIPE_THRESHOLD ||
+                                 abs(currentLogicalY - startLogicalY) >= SWIPE_THRESHOLD;
+      suppressHeldZoneButton = edgeStart || swipeMovement;
+    }
+
+    int btn = suppressHeldZoneButton ? -1 : touchZoneToButton(touchStartX, touchStartY);
     if (btn >= 0 && btn < HALGPIO_NUM_BUTTONS) {
       currentState |= (1 << btn);
     }
@@ -153,13 +182,55 @@ void HalGPIO::update() {
     touchActive = false;
 
     if (footerHeight > 0) {
-      // Footer active (non-reader): no gestures — all touches are plain taps.
-      // 2-finger and swipe are disabled; the footer buttons provide Back/Prev/Next.
+      // Footer active (non-reader): footer taps stay as buttons; content
+      // gestures are exposed separately for direct list interaction.
       int btn = touchZoneToButton(touchStartX, touchStartY);
       if (btn >= 0 && btn < HALGPIO_NUM_BUTTONS) {
         currentState |= (1 << btn);
       } else {
-        contentTapReleased = true;
+        int16_t startLogicalX = 0;
+        int16_t startLogicalY = 0;
+        int16_t lastLogicalX = 0;
+        int16_t lastLogicalY = 0;
+        transformTouchPoint(touchStartX, touchStartY, &startLogicalX, &startLogicalY);
+        transformTouchPoint(lastTouchX, lastTouchY, &lastLogicalX, &lastLogicalY);
+        const int16_t deltaX = lastLogicalX - startLogicalX;
+        const int16_t deltaY = lastLogicalY - startLogicalY;
+        int16_t logicalW = 0;
+        int16_t logicalH = 0;
+        getLogicalDimensions(touchOrientation, &logicalW, &logicalH);
+        const int16_t edgeWidth = logicalW / 8;
+        const int16_t edgeHeight = logicalH / 8;
+        const int16_t horizontalDriftLimit = logicalH / 5;
+        const int16_t verticalDriftLimit = logicalW / 5;
+        const int16_t contentBottom = logicalH - footerHeight;
+
+        if (startLogicalX <= edgeWidth && deltaX >= SWIPE_THRESHOLD && abs(deltaY) <= horizontalDriftLimit) {
+          readerSwipeRightReleased = true;
+          readerSwipeRightFromLeftEdgeReleased = true;
+          LOG_DBG("TOUCH", "content left-edge swipe right dx=%d dy=%d", deltaX, deltaY);
+        } else if (startLogicalX >= logicalW - edgeWidth && deltaX <= -SWIPE_THRESHOLD &&
+                   abs(deltaY) <= horizontalDriftLimit) {
+          readerSwipeLeftReleased = true;
+          readerSwipeLeftFromRightEdgeReleased = true;
+          LOG_DBG("TOUCH", "content right-edge swipe left dx=%d dy=%d", deltaX, deltaY);
+        } else if (startLogicalY <= edgeHeight && deltaY >= SWIPE_THRESHOLD && abs(deltaX) <= verticalDriftLimit) {
+          readerSwipeDownFromTopEdgeReleased = true;
+          LOG_DBG("TOUCH", "content top-edge swipe down dx=%d dy=%d", deltaX, deltaY);
+        } else if (startLogicalY >= contentBottom - edgeHeight && deltaY <= -SWIPE_THRESHOLD &&
+                   abs(deltaX) <= verticalDriftLimit) {
+          readerSwipeUpFromBottomEdgeReleased = true;
+          contentSwipeUpReleased = true;
+          LOG_DBG("TOUCH", "content bottom-edge swipe up dx=%d dy=%d", deltaX, deltaY);
+        } else if (deltaY < -SWIPE_THRESHOLD) {
+          contentSwipeUpReleased = true;
+          LOG_DBG("TOUCH", "content swipe up dy=%d", deltaY);
+        } else if (deltaY > SWIPE_THRESHOLD) {
+          contentSwipeDownReleased = true;
+          LOG_DBG("TOUCH", "content swipe down dy=%d", deltaY);
+        } else {
+          contentTapReleased = true;
+        }
       }
       LOG_DBG("TOUCH", "tap at (%d,%d) btn=%d (footer mode)", touchStartX, touchStartY, btn);
     } else if (sawMultiTouch) {
@@ -175,20 +246,56 @@ void HalGPIO::update() {
       int16_t lastLogicalY = 0;
       transformTouchPoint(touchStartX, touchStartY, &startLogicalX, &startLogicalY);
       transformTouchPoint(lastTouchX, lastTouchY, &lastLogicalX, &lastLogicalY);
-      int16_t deltaY = lastLogicalY - startLogicalY;
+      const int16_t deltaX = lastLogicalX - startLogicalX;
+      const int16_t deltaY = lastLogicalY - startLogicalY;
+      int16_t logicalW = 0;
+      int16_t logicalH = 0;
+      getLogicalDimensions(touchOrientation, &logicalW, &logicalH);
+      const int16_t edgeWidth = logicalW / 8;
+      const int16_t edgeHeight = logicalH / 8;
+      const int16_t driftLimit = logicalW / 5;
 
-      if (deltaY < -SWIPE_THRESHOLD) {
+      if (deltaX <= -SWIPE_THRESHOLD && abs(deltaY) <= driftLimit) {
+        readerSwipeLeftReleased = true;
+        if (startLogicalX >= logicalW - edgeWidth) {
+          readerSwipeLeftFromRightEdgeReleased = true;
+          LOG_DBG("TOUCH", "right-edge swipe left dx=%d dy=%d", deltaX, deltaY);
+        } else {
+          LOG_DBG("TOUCH", "swipe left dx=%d dy=%d", deltaX, deltaY);
+        }
+      } else if (deltaX >= SWIPE_THRESHOLD && abs(deltaY) <= driftLimit) {
+        readerSwipeRightReleased = true;
+        if (startLogicalX <= edgeWidth) {
+          readerSwipeRightFromLeftEdgeReleased = true;
+          LOG_DBG("TOUCH", "left-edge swipe right dx=%d dy=%d", deltaX, deltaY);
+        } else {
+          LOG_DBG("TOUCH", "swipe right dx=%d dy=%d", deltaX, deltaY);
+        }
+      } else if (deltaY < -SWIPE_THRESHOLD) {
         // Swiped up (finger moved upward)
         currentState |= (1 << BTN_SWIPE_UP);
         currentState |= (1 << BTN_UP);
-        LOG_DBG("TOUCH", "swipe up dy=%d", deltaY);
+        if (startLogicalY >= logicalH - edgeHeight) {
+          readerSwipeUpFromBottomEdgeReleased = true;
+          LOG_DBG("TOUCH", "bottom-edge swipe up dy=%d", deltaY);
+        } else {
+          LOG_DBG("TOUCH", "swipe up dy=%d", deltaY);
+        }
       } else if (deltaY > SWIPE_THRESHOLD) {
         // Swiped down (finger moved downward)
         currentState |= (1 << BTN_SWIPE_DOWN);
         currentState |= (1 << BTN_DOWN);
-        LOG_DBG("TOUCH", "swipe down dy=%d", deltaY);
+        if (startLogicalY <= edgeHeight) {
+          readerSwipeDownFromTopEdgeReleased = true;
+          LOG_DBG("TOUCH", "top-edge swipe down dy=%d", deltaY);
+        } else {
+          LOG_DBG("TOUCH", "swipe down dy=%d", deltaY);
+        }
       } else {
         // Tap — map to zone based on touch-down position
+        if (startLogicalY <= logicalH / 6) {
+          readerTapTopReleased = true;
+        }
         int btn = touchZoneToButton(touchStartX, touchStartY);
         if (btn >= 0 && btn < HALGPIO_NUM_BUTTONS) {
           currentState |= (1 << btn);
@@ -219,6 +326,15 @@ void HalGPIO::clearState() {
   pressStartTime = 0;
   lastHeldTime = 0;
   contentTapReleased = false;
+  contentSwipeUpReleased = false;
+  contentSwipeDownReleased = false;
+  readerSwipeLeftReleased = false;
+  readerSwipeRightReleased = false;
+  readerSwipeLeftFromRightEdgeReleased = false;
+  readerSwipeRightFromLeftEdgeReleased = false;
+  readerSwipeDownFromTopEdgeReleased = false;
+  readerSwipeUpFromBottomEdgeReleased = false;
+  readerTapTopReleased = false;
   touchActive = false;
   sawMultiTouch = false;
   cooldownUntil = millis() + 200;  // Suppress input for 200ms after activity transition

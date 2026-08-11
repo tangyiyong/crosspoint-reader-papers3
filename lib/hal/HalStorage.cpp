@@ -49,6 +49,30 @@ class HalStorage::StorageLock {
   ~StorageLock() { xSemaphoreGive(HalStorage::getInstance().storageMutex); }
 };
 
+uint32_t HalStorage::sectorCount() {
+  StorageLock lock;
+  if (!initialized || !sd.card()) return 0;
+  return sd.card()->sectorCount();
+}
+
+bool HalStorage::readSectors(uint32_t sector, uint8_t* buffer, size_t count) {
+  StorageLock lock;
+  if (!initialized || !sd.card() || buffer == nullptr || count == 0) return false;
+  return sd.card()->readSectors(sector, buffer, count);
+}
+
+bool HalStorage::writeSectors(uint32_t sector, const uint8_t* buffer, size_t count) {
+  StorageLock lock;
+  if (!initialized || !sd.card() || buffer == nullptr || count == 0) return false;
+  return sd.card()->writeSectors(sector, buffer, count);
+}
+
+bool HalStorage::syncDevice() {
+  StorageLock lock;
+  if (!initialized || !sd.card()) return false;
+  return sd.card()->syncDevice();
+}
+
 std::vector<String> HalStorage::listFiles(const char* path, int maxFiles) {
   StorageLock lock;
   std::vector<String> ret;

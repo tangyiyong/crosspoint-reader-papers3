@@ -172,11 +172,24 @@ void SdFirmwareUpdateActivity::loop() {
     const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
     const int listTop = contentTop + height + metrics.verticalSpacing;
     const int listHeight = pageHeight - listTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
+    const Rect listRect{0, listTop, pageWidth, listHeight > 0 ? listHeight : 0};
+    const int candidateItems = static_cast<int>(candidateCount);
+    const int pageItems = UITheme::getInstance().getListItemsPerPage(listRect, false);
+
+    if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+      if (pageItems > 0 && candidateItems > pageItems) {
+        selectedIndex = mappedInput.wasContentSwipedUp()
+                            ? ButtonNavigator::nextPageIndex(selectedIndex, candidateItems, pageItems)
+                            : ButtonNavigator::previousPageIndex(selectedIndex, candidateItems, pageItems);
+        requestUpdate();
+        return;
+      }
+    }
 
     if (mappedInput.wasContentTapped()) {
-      const int tappedIndex = UITheme::getInstance().hitTestListItem(
-          Rect{0, listTop, pageWidth, listHeight > 0 ? listHeight : 0}, static_cast<int>(candidateCount),
-          selectedIndex, false, mappedInput.getTouchX(), mappedInput.getTouchY());
+      const int tappedIndex = UITheme::getInstance().hitTestListItem(listRect, static_cast<int>(candidateCount),
+                                                                     selectedIndex, false, mappedInput.getTouchX(),
+                                                                     mappedInput.getTouchY());
       if (tappedIndex >= 0) {
         selectedIndex = tappedIndex;
         selectCandidate(selectedIndex);

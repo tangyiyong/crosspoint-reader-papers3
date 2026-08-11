@@ -32,11 +32,22 @@ void LanguageSelectActivity::loop() {
   auto metrics = UITheme::getInstance().getMetrics();
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
+  const Rect listRect{0, contentTop, pageWidth, contentHeight};
+  const int pageItems = UITheme::getInstance().getListItemsPerPage(listRect, false);
+
+  if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+    if (pageItems > 0 && totalItems > pageItems) {
+      selectedIndex = mappedInput.wasContentSwipedUp()
+                          ? ButtonNavigator::nextPageIndex(selectedIndex, totalItems, pageItems)
+                          : ButtonNavigator::previousPageIndex(selectedIndex, totalItems, pageItems);
+      requestUpdate();
+      return;
+    }
+  }
 
   if (mappedInput.wasContentTapped()) {
-    const int tappedIndex = UITheme::getInstance().hitTestListItem(
-        Rect{0, contentTop, pageWidth, contentHeight}, totalItems, selectedIndex, false, mappedInput.getTouchX(),
-        mappedInput.getTouchY());
+    const int tappedIndex = UITheme::getInstance().hitTestListItem(listRect, totalItems, selectedIndex, false,
+                                                                   mappedInput.getTouchX(), mappedInput.getTouchY());
     if (tappedIndex >= 0) {
       selectedIndex = tappedIndex;
       handleSelection();

@@ -28,6 +28,7 @@ class EpubReaderActivity final : public Activity {
   bool skipNextButtonCheck = false;  // Skip button processing for one frame after subactivity exit
   bool automaticPageTurnActive = false;
   bool readerMenuLongPressHandled = false;
+  bool readerBackOverlayVisible = false;
 
   // Footnote support
   std::vector<FootnoteEntry> currentPageFootnotes;
@@ -47,6 +48,7 @@ class EpubReaderActivity final : public Activity {
   // Jump to a percentage of the book (0-100), mapping it to spine and page.
   void jumpToPercent(int percent);
   void openReaderMenu();
+  void openReaderQuickSettings();
   void onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action);
   void applyOrientation(uint8_t orientation);
   void toggleAutoPageTurn(uint8_t selectedPageTurnOption);

@@ -18,6 +18,29 @@ void EpubReaderFootnotesActivity::onEnter() {
 void EpubReaderFootnotesActivity::onExit() { Activity::onExit(); }
 
 void EpubReaderFootnotesActivity::loop() {
+  if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+    if (!footnotes.empty()) {
+      const auto orientation = renderer.getOrientation();
+      const bool isPortraitInverted = orientation == GfxRenderer::Orientation::PortraitInverted;
+      const int contentY = isPortraitInverted ? 50 : 0;
+#if CROSSPOINT_PAPERS3
+      constexpr int lineHeight = 75;
+#else
+      constexpr int lineHeight = 36;
+#endif
+      const int visibleCount = std::max(1, (renderer.getScreenHeight() - contentY) / lineHeight);
+      if (static_cast<int>(footnotes.size()) > visibleCount) {
+        selectedIndex = mappedInput.wasContentSwipedUp()
+                            ? ButtonNavigator::nextPageIndex(selectedIndex, static_cast<int>(footnotes.size()),
+                                                             visibleCount)
+                            : ButtonNavigator::previousPageIndex(selectedIndex, static_cast<int>(footnotes.size()),
+                                                                 visibleCount);
+        requestUpdate();
+        return;
+      }
+    }
+  }
+
   if (mappedInput.wasContentTapped() && !footnotes.empty()) {
     const auto pageWidth = renderer.getScreenWidth();
     const auto orientation = renderer.getOrientation();

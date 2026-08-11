@@ -187,6 +187,18 @@ void FileBrowserActivity::loop() {
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight =
       pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing - pathReserved;
+  const int listSize = static_cast<int>(files.size());
+
+  if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+    if (pageItems > 0 && listSize > pageItems) {
+      selectorIndex = static_cast<size_t>(
+          mappedInput.wasContentSwipedUp()
+              ? ButtonNavigator::nextPageIndex(static_cast<int>(selectorIndex), listSize, pageItems)
+              : ButtonNavigator::previousPageIndex(static_cast<int>(selectorIndex), listSize, pageItems));
+      requestUpdate();
+      return;
+    }
+  }
 
   if (mappedInput.wasContentTapped()) {
     const int tappedIndex = UITheme::getInstance().hitTestListItem(
@@ -265,7 +277,6 @@ void FileBrowserActivity::loop() {
     }
   }
 
-  int listSize = static_cast<int>(files.size());
 #if CROSSPOINT_PAPERS3
   // On Paper S3, Up/Down move one row at a time
   if (mappedInput.wasReleased(MappedInputManager::Button::Up)) {

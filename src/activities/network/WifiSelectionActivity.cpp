@@ -421,11 +421,24 @@ void WifiSelectionActivity::loop() {
     const auto pageHeight = renderer.getScreenHeight();
     const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.verticalSpacing;
     const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
+    const Rect listRect{0, contentTop, pageWidth, contentHeight};
+    const int networkCount = static_cast<int>(networks.size());
+    const int pageItems = UITheme::getInstance().getListItemsPerPage(listRect, false);
+
+    if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+      if (pageItems > 0 && networkCount > pageItems) {
+        selectedNetworkIndex = mappedInput.wasContentSwipedUp()
+                                   ? ButtonNavigator::nextPageIndex(selectedNetworkIndex, networkCount, pageItems)
+                                   : ButtonNavigator::previousPageIndex(selectedNetworkIndex, networkCount, pageItems);
+        requestUpdate();
+        return;
+      }
+    }
 
     if (mappedInput.wasContentTapped()) {
-      const int tappedIndex = UITheme::getInstance().hitTestListItem(
-          Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(networks.size()), selectedNetworkIndex, false,
-          mappedInput.getTouchX(), mappedInput.getTouchY());
+      const int tappedIndex =
+          UITheme::getInstance().hitTestListItem(listRect, static_cast<int>(networks.size()), selectedNetworkIndex,
+                                                 false, mappedInput.getTouchX(), mappedInput.getTouchY());
       if (tappedIndex >= 0) {
         selectedNetworkIndex = tappedIndex;
         selectNetwork(selectedNetworkIndex);

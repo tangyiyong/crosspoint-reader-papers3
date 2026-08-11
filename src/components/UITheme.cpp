@@ -67,6 +67,11 @@ int UITheme::getNumberOfItemsPerPage(const GfxRenderer& renderer, bool hasHeader
   return availableHeight / rowHeight;
 }
 
+int UITheme::getListItemsPerPage(const Rect rect, const bool hasSubtitle) const {
+  const int rowHeight = hasSubtitle ? currentMetrics->listWithSubtitleRowHeight : currentMetrics->listRowHeight;
+  return rowHeight > 0 ? rect.height / rowHeight : 0;
+}
+
 int UITheme::hitTestListItem(const Rect rect, const int itemCount, const int selectedIndex, const bool hasSubtitle,
                              const int touchX, const int touchY) const {
   if (itemCount <= 0 || touchX < rect.x || touchX >= rect.x + rect.width || touchY < rect.y ||
@@ -75,7 +80,7 @@ int UITheme::hitTestListItem(const Rect rect, const int itemCount, const int sel
   }
 
   const int rowHeight = hasSubtitle ? currentMetrics->listWithSubtitleRowHeight : currentMetrics->listRowHeight;
-  const int pageItems = rowHeight > 0 ? rect.height / rowHeight : 0;
+  const int pageItems = getListItemsPerPage(rect, hasSubtitle);
   if (pageItems <= 0) {
     return -1;
   }

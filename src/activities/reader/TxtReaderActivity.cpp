@@ -13,6 +13,7 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
+#include "ReaderQuickSettingsActivity.h"
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
@@ -131,6 +132,49 @@ void TxtReaderActivity::onExit() {
 }
 
 void TxtReaderActivity::loop() {
+  if (ReaderUtils::wasBackGesture(mappedInput)) {
+    LOG_DBG("TRS", "reader gesture back to file browser");
+    activityManager.goToFileBrowser(txt ? txt->getPath() : "");
+    return;
+  }
+
+  if (readerBackOverlayVisible && ReaderUtils::wasBackOverlayTap(mappedInput)) {
+    const auto action =
+        ReaderUtils::hitTestReaderQuickBar(renderer, true, mappedInput.getTouchX(), mappedInput.getTouchY());
+    readerBackOverlayVisible = false;
+    if (action == ReaderUtils::QuickBarAction::Back) {
+      LOG_DBG("TRS", "reader quick bar back");
+      activityManager.goToFileBrowser(txt ? txt->getPath() : "");
+      return;
+    }
+    if (action == ReaderUtils::QuickBarAction::Home) {
+      LOG_DBG("TRS", "reader quick bar home");
+      onGoHome();
+      return;
+    }
+    if (action == ReaderUtils::QuickBarAction::Settings) {
+      LOG_DBG("TRS", "reader quick bar settings");
+      openReaderQuickSettings();
+      return;
+    }
+    requestUpdate();
+    return;
+  }
+
+  if (ReaderUtils::wasBackRevealGesture(mappedInput)) {
+    LOG_DBG("TRS", "reader gesture show back overlay");
+    readerBackOverlayVisible = true;
+    requestUpdate();
+    return;
+  }
+
+  if (ReaderUtils::wasMenuGesture(mappedInput)) {
+    LOG_DBG("TRS", "reader gesture open quick settings");
+    readerBackOverlayVisible = false;
+    openReaderQuickSettings();
+    return;
+  }
+
   // Long press BACK (1s+) goes to file selection
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
     activityManager.goToFileBrowser(txt ? txt->getPath() : "");
@@ -142,6 +186,7 @@ void TxtReaderActivity::loop() {
     readerMenuLongPressHandled = false;
   } else if (!readerMenuLongPressHandled && mappedInput.getHeldTime() >= ReaderUtils::READER_MENU_LONG_PRESS_MS) {
     readerMenuLongPressHandled = true;
+    readerBackOverlayVisible = false;
     openReaderMenu();
     return;
   }
@@ -157,6 +202,8 @@ void TxtReaderActivity::loop() {
   if (!prevTriggered && !nextTriggered) {
     return;
   }
+
+  readerBackOverlayVisible = false;
 
   if (prevTriggered && currentPage > 0) {
     currentPage--;
@@ -188,6 +235,23 @@ void TxtReaderActivity::openReaderMenu() {
           requestUpdate();
         }
       });
+}
+
+void TxtReaderActivity::openReaderQuickSettings() {
+  startActivityForResult(std::make_unique<ReaderQuickSettingsActivity>(renderer, mappedInput),
+                         [this](const ActivityResult& result) {
+                           if (result.isCancelled) {
+                             requestUpdate();
+                             return;
+                           }
+                           ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
+                           mappedInput.setTouchOrientation(SETTINGS.orientation);
+                           initialized = false;
+                           pageOffsets.clear();
+                           currentPageLines.clear();
+                           pagesUntilFullRefresh = 1;
+                           requestUpdate();
+                         });
 }
 
 void TxtReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action) {
@@ -471,6 +535,7 @@ void TxtReaderActivity::render(RenderLock&&) {
   if (pageOffsets.empty()) {
     renderer.clearScreen();
     renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_EMPTY_FILE), true, EpdFontFamily::BOLD);
+    ReaderUtils::drawReaderBackOverlay(renderer, readerBackOverlayVisible);
     renderer.displayBuffer();
     return;
   }
@@ -552,6 +617,7 @@ void TxtReaderActivity::renderPage() {
   renderLines();
   renderer.setRenderMode(GfxRenderer::BW);
   renderStatusBar();
+  ReaderUtils::drawReaderBackOverlay(renderer, readerBackOverlayVisible);
 
   ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
   // scope destructor clears font cache via FontCacheManager

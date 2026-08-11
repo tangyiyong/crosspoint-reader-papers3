@@ -15,6 +15,7 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
+#include "ReaderQuickSettingsActivity.h"
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
 #include "XtcReaderChapterSelectionActivity.h"
@@ -72,11 +73,55 @@ void XtcReaderActivity::loop() {
   }
 #endif
 
+  if (ReaderUtils::wasBackGesture(mappedInput)) {
+    LOG_DBG("XTR", "reader gesture back to file browser");
+    activityManager.goToFileBrowser(xtc ? xtc->getPath() : "");
+    return;
+  }
+
+  if (readerBackOverlayVisible && ReaderUtils::wasBackOverlayTap(mappedInput)) {
+    const auto action =
+        ReaderUtils::hitTestReaderQuickBar(renderer, true, mappedInput.getTouchX(), mappedInput.getTouchY());
+    readerBackOverlayVisible = false;
+    if (action == ReaderUtils::QuickBarAction::Back) {
+      LOG_DBG("XTR", "reader quick bar back");
+      activityManager.goToFileBrowser(xtc ? xtc->getPath() : "");
+      return;
+    }
+    if (action == ReaderUtils::QuickBarAction::Home) {
+      LOG_DBG("XTR", "reader quick bar home");
+      onGoHome();
+      return;
+    }
+    if (action == ReaderUtils::QuickBarAction::Settings) {
+      LOG_DBG("XTR", "reader quick bar settings");
+      openReaderQuickSettings();
+      return;
+    }
+    requestUpdate();
+    return;
+  }
+
+  if (ReaderUtils::wasBackRevealGesture(mappedInput)) {
+    LOG_DBG("XTR", "reader gesture show back overlay");
+    readerBackOverlayVisible = true;
+    requestUpdate();
+    return;
+  }
+
+  if (ReaderUtils::wasMenuGesture(mappedInput)) {
+    LOG_DBG("XTR", "reader gesture open quick settings");
+    readerBackOverlayVisible = false;
+    openReaderQuickSettings();
+    return;
+  }
+
   const bool menuPressActive = mappedInput.isPressed(MappedInputManager::Button::Confirm);
   if (!menuPressActive) {
     chapterMenuLongPressHandled = false;
   } else if (!chapterMenuLongPressHandled && mappedInput.getHeldTime() >= ReaderUtils::READER_MENU_LONG_PRESS_MS) {
     chapterMenuLongPressHandled = true;
+    readerBackOverlayVisible = false;
     openChapterSelection();
     return;
   }
@@ -95,21 +140,25 @@ void XtcReaderActivity::loop() {
 
   // When long-press chapter skip is disabled, turn pages on press instead of release.
   const bool usePressForPageTurn = !SETTINGS.longPressChapterSkip;
-  const bool prevTriggered = usePressForPageTurn ? (mappedInput.wasPressed(MappedInputManager::Button::PageBack) ||
+  const bool prevTriggered = mappedInput.wasReaderSwipeRight() ||
+                             (usePressForPageTurn ? (mappedInput.wasPressed(MappedInputManager::Button::PageBack) ||
                                                     mappedInput.wasPressed(MappedInputManager::Button::Left))
                                                  : (mappedInput.wasReleased(MappedInputManager::Button::PageBack) ||
-                                                    mappedInput.wasReleased(MappedInputManager::Button::Left));
+                                                    mappedInput.wasReleased(MappedInputManager::Button::Left)));
   const bool powerPageTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN &&
                              mappedInput.wasReleased(MappedInputManager::Button::Power);
-  const bool nextTriggered = usePressForPageTurn
+  const bool nextTriggered = mappedInput.wasReaderSwipeLeft() ||
+                             (usePressForPageTurn
                                  ? (mappedInput.wasPressed(MappedInputManager::Button::PageForward) || powerPageTurn ||
                                     mappedInput.wasPressed(MappedInputManager::Button::Right))
                                  : (mappedInput.wasReleased(MappedInputManager::Button::PageForward) || powerPageTurn ||
-                                    mappedInput.wasReleased(MappedInputManager::Button::Right));
+                                    mappedInput.wasReleased(MappedInputManager::Button::Right)));
 
   if (!prevTriggered && !nextTriggered) {
     return;
   }
+
+  readerBackOverlayVisible = false;
 
   // At end of the book, forward button goes home and back button returns to last page
   if (currentPage >= xtc->getPageCount()) {
@@ -154,6 +203,20 @@ void XtcReaderActivity::openChapterSelection() {
                          });
 }
 
+void XtcReaderActivity::openReaderQuickSettings() {
+  startActivityForResult(std::make_unique<ReaderQuickSettingsActivity>(renderer, mappedInput),
+                         [this](const ActivityResult& result) {
+                           if (result.isCancelled) {
+                             requestUpdate();
+                             return;
+                           }
+                           ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
+                           mappedInput.setTouchOrientation(SETTINGS.orientation);
+                           pagesUntilFullRefresh = 1;
+                           requestUpdate();
+                         });
+}
+
 void XtcReaderActivity::render(RenderLock&&) {
   if (!xtc) {
     return;
@@ -164,6 +227,7 @@ void XtcReaderActivity::render(RenderLock&&) {
     // Show end of book screen
     renderer.clearScreen();
     renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_END_OF_BOOK), true, EpdFontFamily::BOLD);
+    ReaderUtils::drawReaderBackOverlay(renderer, readerBackOverlayVisible);
     renderer.displayBuffer();
     return;
   }
@@ -193,6 +257,7 @@ void XtcReaderActivity::renderPage() {
     LOG_ERR("XTR", "Failed to allocate page buffer (%lu bytes)", pageBufferSize);
     renderer.clearScreen();
     renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_MEMORY_ERROR), true, EpdFontFamily::BOLD);
+    ReaderUtils::drawReaderBackOverlay(renderer, readerBackOverlayVisible);
     renderer.displayBuffer();
     return;
   }
@@ -204,6 +269,7 @@ void XtcReaderActivity::renderPage() {
     free(pageBuffer);
     renderer.clearScreen();
     renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_PAGE_LOAD_ERROR), true, EpdFontFamily::BOLD);
+    ReaderUtils::drawReaderBackOverlay(renderer, readerBackOverlayVisible);
     renderer.displayBuffer();
     return;
   }
@@ -254,6 +320,8 @@ void XtcReaderActivity::renderPage() {
       }
     }
 
+    ReaderUtils::drawReaderBackOverlay(renderer, readerBackOverlayVisible);
+
     // Single paint
     if (pagesUntilFullRefresh <= 1) {
       renderer.displayBuffer(HalDisplay::HALF_REFRESH);
@@ -291,6 +359,7 @@ void XtcReaderActivity::renderPage() {
   free(pageBuffer);
 
   // XTC pages already have status bar pre-rendered, no need to add our own
+  ReaderUtils::drawReaderBackOverlay(renderer, readerBackOverlayVisible);
 
   // Display with appropriate refresh
   if (pagesUntilFullRefresh <= 1) {

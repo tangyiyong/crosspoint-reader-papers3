@@ -52,6 +52,16 @@ void EpubReaderChapterSelectionActivity::loop() {
   const int totalItems = getTotalItems();
 
 #if CROSSPOINT_PAPERS3
+  if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+    if (pageItems > 0 && totalItems > pageItems) {
+      selectorIndex = mappedInput.wasContentSwipedUp()
+                          ? ButtonNavigator::nextPageIndex(selectorIndex, totalItems, pageItems)
+                          : ButtonNavigator::previousPageIndex(selectorIndex, totalItems, pageItems);
+      requestUpdate();
+      return;
+    }
+  }
+
   if (mappedInput.wasContentTapped()) {
     const auto pageWidth = renderer.getScreenWidth();
     const auto orientation = renderer.getOrientation();

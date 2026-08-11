@@ -24,6 +24,7 @@ class TxtReaderActivity final : public Activity {
   bool pageIndexComplete = false;
   bool readerMenuLongPressHandled = false;
   bool pendingScreenshot = false;
+  bool readerBackOverlayVisible = false;
 
   // Cached settings for cache validation (different fonts/margins require re-indexing)
   int cachedFontId = 0;
@@ -37,6 +38,7 @@ class TxtReaderActivity final : public Activity {
   void renderPage();
   void renderStatusBar() const;
   void openReaderMenu();
+  void openReaderQuickSettings();
   void onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action);
 
   void initializeReader();

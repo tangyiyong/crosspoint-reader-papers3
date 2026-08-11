@@ -23,6 +23,7 @@ enum class SettingAction {
   InstallFirmwareFromSd,
   Language,
   ExternalReaderFont,
+  UsbMassStorage,
 };
 
 struct SettingInfo {

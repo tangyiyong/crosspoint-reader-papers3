@@ -34,10 +34,24 @@ class MappedInputManager {
     // while the zone button transitions from previousState, so use isPressed guards.
     if (gpio.isPressed(HalGPIO::BTN_TWO_FINGER)) return false;
     if (gpio.isPressed(HalGPIO::BTN_SWIPE_UP) || gpio.isPressed(HalGPIO::BTN_SWIPE_DOWN)) return false;
+    if (wasReaderSwipeLeft() || wasReaderSwipeRight()) return false;
     return gpio.wasReleased(HalGPIO::BTN_LEFT) || gpio.wasReleased(HalGPIO::BTN_CONFIRM) ||
            gpio.wasReleased(HalGPIO::BTN_RIGHT);
   }
   bool wasContentTapped() const { return gpio.wasContentTapReleased(); }
+  bool wasContentSwipedUp() const { return gpio.wasContentSwipeUpReleased() || wasEdgeNextGesture(); }
+  bool wasContentSwipedDown() const { return gpio.wasContentSwipeDownReleased(); }
+  bool wasReaderSwipeLeft() const { return gpio.wasReaderSwipeLeftReleased(); }
+  bool wasReaderSwipeRight() const { return gpio.wasReaderSwipeRightReleased(); }
+  bool wasReaderSwipeLeftFromRightEdge() const { return gpio.wasReaderSwipeLeftFromRightEdgeReleased(); }
+  bool wasReaderSwipeRightFromLeftEdge() const { return gpio.wasReaderSwipeRightFromLeftEdgeReleased(); }
+  bool wasReaderSwipeDownFromTopEdge() const { return gpio.wasReaderSwipeDownFromTopEdgeReleased(); }
+  bool wasReaderSwipeUpFromBottomEdge() const { return gpio.wasReaderSwipeUpFromBottomEdgeReleased(); }
+  bool wasReaderTapTop() const { return gpio.wasReaderTapTopReleased(); }
+  bool wasEdgeBackGesture() const {
+    return gpio.wasReaderSwipeRightFromLeftEdgeReleased() || gpio.wasReaderSwipeDownFromTopEdgeReleased();
+  }
+  bool wasEdgeNextGesture() const { return gpio.wasReaderSwipeLeftFromRightEdgeReleased(); }
   bool wasPressed(Button button) const;
   bool wasReleased(Button button) const;
   bool isPressed(Button button) const;

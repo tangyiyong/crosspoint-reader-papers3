@@ -44,6 +44,10 @@ class HalStorage {
   bool openFileForWrite(const char* moduleName, const std::string& path, HalFile& file);
   bool openFileForWrite(const char* moduleName, const String& path, HalFile& file);
   bool removeDir(const char* path);
+  uint32_t sectorCount();
+  bool readSectors(uint32_t sector, uint8_t* buffer, size_t count);
+  bool writeSectors(uint32_t sector, const uint8_t* buffer, size_t count);
+  bool syncDevice();
 
   static HalStorage& getInstance() { return instance; }
 

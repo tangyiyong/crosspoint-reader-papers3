@@ -7,6 +7,7 @@
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/ButtonNavigator.h"
 
 namespace {
 // UI steps correspond to logical roles in order: Back, Confirm, Left, Right.
@@ -47,11 +48,23 @@ void ButtonRemapActivity::loop() {
   const auto pageHeight = renderer.getScreenHeight();
   const int topOffset = metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.verticalSpacing;
   const int contentHeight = pageHeight - topOffset - metrics.buttonHintsHeight - metrics.verticalSpacing;
+  const Rect listRect{0, topOffset, pageWidth, contentHeight};
+  const int pageItems = UITheme::getInstance().getListItemsPerPage(listRect, false);
+
+  if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+    if (pageItems > 0 && kRoleCount > pageItems) {
+      currentStep = static_cast<uint8_t>(
+          mappedInput.wasContentSwipedUp()
+              ? ButtonNavigator::nextPageIndex(currentStep, kRoleCount, pageItems)
+              : ButtonNavigator::previousPageIndex(currentStep, kRoleCount, pageItems));
+      requestUpdate();
+      return;
+    }
+  }
 
   if (mappedInput.wasContentTapped()) {
-    const int tappedIndex = UITheme::getInstance().hitTestListItem(
-        Rect{0, topOffset, pageWidth, contentHeight}, kRoleCount, currentStep, false, mappedInput.getTouchX(),
-        mappedInput.getTouchY());
+    const int tappedIndex = UITheme::getInstance().hitTestListItem(listRect, kRoleCount, currentStep, false,
+                                                                   mappedInput.getTouchX(), mappedInput.getTouchY());
     if (tappedIndex >= 0) {
       currentStep = static_cast<uint8_t>(tappedIndex);
       requestUpdate();

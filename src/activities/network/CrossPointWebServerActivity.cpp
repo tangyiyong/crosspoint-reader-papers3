@@ -13,6 +13,7 @@
 #include "NetworkModeSelectionActivity.h"
 #include "WifiSelectionActivity.h"
 #include "activities/network/CalibreConnectActivity.h"
+#include "activities/settings/UsbMassStorageActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/QrUtils.h"
@@ -105,11 +106,19 @@ void CrossPointWebServerActivity::onNetworkModeSelected(const NetworkMode mode) 
     modeName = "Connect to Calibre";
   } else if (mode == NetworkMode::CREATE_HOTSPOT) {
     modeName = "Create Hotspot";
+  } else if (mode == NetworkMode::USB_MASS_STORAGE) {
+    modeName = "USB Mass Storage";
   }
   LOG_DBG("WEBACT", "Network mode selected: %s", modeName);
 
   networkMode = mode;
   isApMode = (mode == NetworkMode::CREATE_HOTSPOT);
+
+  if (mode == NetworkMode::USB_MASS_STORAGE) {
+    startActivityForResult(std::make_unique<UsbMassStorageActivity>(renderer, mappedInput),
+                           [this](const ActivityResult&) { onGoHome(); });
+    return;
+  }
 
   if (mode == NetworkMode::CONNECT_CALIBRE) {
     startActivityForResult(
@@ -239,6 +248,15 @@ void CrossPointWebServerActivity::startAccessPoint() {
 
 void CrossPointWebServerActivity::startWebServer() {
   LOG_DBG("WEBACT", "Starting web server...");
+
+  const IPAddress currentIP = isApMode ? WiFi.softAPIP() : WiFi.localIP();
+  connectedIP = currentIP.toString().c_str();
+  if (!isApMode) {
+    connectedSSID = WiFi.SSID().c_str();
+  }
+  LOG_INF("WEBACT", "Network ready: mode=%s ssid=%s ip=%s wifiStatus=%d apStations=%d",
+          isApMode ? "AP" : "STA", connectedSSID.c_str(), connectedIP.c_str(), WiFi.status(),
+          WiFi.softAPgetStationNum());
 
   // Create the web server instance
   webServer.reset(new CrossPointWebServer());

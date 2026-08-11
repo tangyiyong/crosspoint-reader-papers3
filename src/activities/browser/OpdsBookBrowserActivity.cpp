@@ -107,6 +107,33 @@ void OpdsBookBrowserActivity::loop() {
 
     // Handle navigation
     if (!entries.empty()) {
+      if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+        if (static_cast<int>(entries.size()) > PAGE_ITEMS) {
+          selectorIndex =
+              mappedInput.wasContentSwipedUp()
+                  ? ButtonNavigator::nextPageIndex(selectorIndex, static_cast<int>(entries.size()), PAGE_ITEMS)
+                  : ButtonNavigator::previousPageIndex(selectorIndex, static_cast<int>(entries.size()), PAGE_ITEMS);
+          requestUpdate();
+          return;
+        }
+      }
+
+      if (mappedInput.wasContentTapped()) {
+        constexpr int listTop = 60;
+        constexpr int rowHeight = 30;
+        const int touchY = mappedInput.getTouchY();
+        if (touchY >= listTop) {
+          const int row = (touchY - listTop) / rowHeight;
+          const int tappedIndex = (selectorIndex / PAGE_ITEMS * PAGE_ITEMS) + row;
+          if (row >= 0 && row < PAGE_ITEMS && tappedIndex >= 0 && tappedIndex < static_cast<int>(entries.size())) {
+            selectorIndex = tappedIndex;
+            const auto& entry = entries[selectorIndex];
+            entry.type == OpdsEntryType::BOOK ? downloadBook(entry) : navigateToEntry(entry);
+            return;
+          }
+        }
+      }
+
       buttonNavigator.onNextRelease([this] {
         selectorIndex = ButtonNavigator::nextIndex(selectorIndex, entries.size());
         requestUpdate();

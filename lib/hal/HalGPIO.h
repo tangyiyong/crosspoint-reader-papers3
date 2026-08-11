@@ -22,6 +22,15 @@ class HalGPIO {
   int16_t getLastTouchX() const;
   int16_t getLastTouchY() const;
   bool wasContentTapReleased() const { return contentTapReleased; }
+  bool wasContentSwipeUpReleased() const { return contentSwipeUpReleased; }
+  bool wasContentSwipeDownReleased() const { return contentSwipeDownReleased; }
+  bool wasReaderSwipeLeftReleased() const { return readerSwipeLeftReleased; }
+  bool wasReaderSwipeRightReleased() const { return readerSwipeRightReleased; }
+  bool wasReaderSwipeLeftFromRightEdgeReleased() const { return readerSwipeLeftFromRightEdgeReleased; }
+  bool wasReaderSwipeRightFromLeftEdgeReleased() const { return readerSwipeRightFromLeftEdgeReleased; }
+  bool wasReaderSwipeDownFromTopEdgeReleased() const { return readerSwipeDownFromTopEdgeReleased; }
+  bool wasReaderSwipeUpFromBottomEdgeReleased() const { return readerSwipeUpFromBottomEdgeReleased; }
+  bool wasReaderTapTopReleased() const { return readerTapTopReleased; }
 
   // Footer nav bar: taps in the bottom footerHeight pixels map to
   // Back / Confirm / Up / Down instead of the normal 3-zone split.
@@ -71,6 +80,15 @@ class HalGPIO {
   int16_t lastTouchX = -1;
   int16_t lastTouchY = -1;
   bool contentTapReleased = false;
+  bool contentSwipeUpReleased = false;
+  bool contentSwipeDownReleased = false;
+  bool readerSwipeLeftReleased = false;
+  bool readerSwipeRightReleased = false;
+  bool readerSwipeLeftFromRightEdgeReleased = false;
+  bool readerSwipeRightFromLeftEdgeReleased = false;
+  bool readerSwipeDownFromTopEdgeReleased = false;
+  bool readerSwipeUpFromBottomEdgeReleased = false;
+  bool readerTapTopReleased = false;
 
   // Gesture tracking: swipe detection + multi-finger
   bool touchActive = false;                       // A finger is currently down

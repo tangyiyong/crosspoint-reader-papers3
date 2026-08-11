@@ -60,6 +60,17 @@ void XtcReaderChapterSelectionActivity::loop() {
   const int totalItems = static_cast<int>(xtc->getChapters().size());
 
 #if CROSSPOINT_PAPERS3
+  if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+    const int pageItems = getPageItems();
+    if (pageItems > 0 && totalItems > pageItems) {
+      selectorIndex = mappedInput.wasContentSwipedUp()
+                          ? ButtonNavigator::nextPageIndex(selectorIndex, totalItems, pageItems)
+                          : ButtonNavigator::previousPageIndex(selectorIndex, totalItems, pageItems);
+      requestUpdate();
+      return;
+    }
+  }
+
   if (mappedInput.wasContentTapped()) {
     const int pageItems = getPageItems();
     const auto pageWidth = renderer.getScreenWidth();

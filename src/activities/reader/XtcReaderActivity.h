@@ -17,8 +17,10 @@ class XtcReaderActivity final : public Activity {
   uint32_t currentPage = 0;
   int pagesUntilFullRefresh = 0;
   bool chapterMenuLongPressHandled = false;
+  bool readerBackOverlayVisible = false;
 
   void openChapterSelection();
+  void openReaderQuickSettings();
   void renderPage();
   void saveProgress() const;
   void loadProgress();

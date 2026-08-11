@@ -118,11 +118,23 @@ void StatusBarSettingsActivity::loop() {
   const auto pageHeight = renderer.getScreenHeight();
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
+  const Rect listRect{0, contentTop, pageWidth, contentHeight};
+  const int pageItems = UITheme::getInstance().getListItemsPerPage(listRect, false);
+
+  if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+    if (pageItems > 0 && visibleItemCount > pageItems) {
+      selectedIndex = mappedInput.wasContentSwipedUp()
+                          ? ButtonNavigator::nextPageIndex(selectedIndex, visibleItemCount, pageItems)
+                          : ButtonNavigator::previousPageIndex(selectedIndex, visibleItemCount, pageItems);
+      requestUpdate();
+      return;
+    }
+  }
 
   if (mappedInput.wasContentTapped()) {
-    const int tappedIndex = UITheme::getInstance().hitTestListItem(
-        Rect{0, contentTop, pageWidth, contentHeight}, visibleItemCount, static_cast<int>(selectedIndex), false,
-        mappedInput.getTouchX(), mappedInput.getTouchY());
+    const int tappedIndex =
+        UITheme::getInstance().hitTestListItem(listRect, visibleItemCount, static_cast<int>(selectedIndex), false,
+                                               mappedInput.getTouchX(), mappedInput.getTouchY());
     if (tappedIndex >= 0) {
       selectedIndex = tappedIndex;
       handleSelection();

@@ -22,6 +22,7 @@
 #include "MappedInputManager.h"
 #include "QrDisplayActivity.h"
 #include "ReaderUtils.h"
+#include "ReaderQuickSettingsActivity.h"
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -152,11 +153,55 @@ void EpubReaderActivity::loop() {
   }
 #endif
 
+  if (ReaderUtils::wasBackGesture(mappedInput)) {
+    LOG_DBG("ERS", "reader gesture back to file browser");
+    activityManager.goToFileBrowser(epub ? epub->getPath() : "");
+    return;
+  }
+
+  if (readerBackOverlayVisible && ReaderUtils::wasBackOverlayTap(mappedInput)) {
+    const auto action =
+        ReaderUtils::hitTestReaderQuickBar(renderer, true, mappedInput.getTouchX(), mappedInput.getTouchY());
+    readerBackOverlayVisible = false;
+    if (action == ReaderUtils::QuickBarAction::Back) {
+      LOG_DBG("ERS", "reader quick bar back");
+      activityManager.goToFileBrowser(epub ? epub->getPath() : "");
+      return;
+    }
+    if (action == ReaderUtils::QuickBarAction::Home) {
+      LOG_DBG("ERS", "reader quick bar home");
+      onGoHome();
+      return;
+    }
+    if (action == ReaderUtils::QuickBarAction::Settings) {
+      LOG_DBG("ERS", "reader quick bar settings");
+      openReaderQuickSettings();
+      return;
+    }
+    requestUpdate();
+    return;
+  }
+
+  if (ReaderUtils::wasBackRevealGesture(mappedInput)) {
+    LOG_DBG("ERS", "reader gesture show back overlay");
+    readerBackOverlayVisible = true;
+    requestUpdate();
+    return;
+  }
+
+  if (ReaderUtils::wasMenuGesture(mappedInput)) {
+    LOG_DBG("ERS", "reader gesture open quick settings");
+    readerBackOverlayVisible = false;
+    openReaderQuickSettings();
+    return;
+  }
+
   const bool menuPressActive = mappedInput.isPressed(MappedInputManager::Button::Confirm);
   if (!menuPressActive) {
     readerMenuLongPressHandled = false;
   } else if (!readerMenuLongPressHandled && mappedInput.getHeldTime() >= ReaderUtils::READER_MENU_LONG_PRESS_MS) {
     readerMenuLongPressHandled = true;
+    readerBackOverlayVisible = false;
     openReaderMenu();
     return;
   }
@@ -182,6 +227,8 @@ void EpubReaderActivity::loop() {
   if (!prevTriggered && !nextTriggered) {
     return;
   }
+
+  readerBackOverlayVisible = false;
 
   constexpr unsigned long kMinManualTurnGapMs = 200;
   if (RenderLock::peek() || (millis() - lastPageTurnTime) < kMinManualTurnGapMs) {
@@ -332,6 +379,21 @@ void EpubReaderActivity::openReaderMenu() {
                            } else {
                              requestUpdate();
                            }
+                           });
+}
+
+void EpubReaderActivity::openReaderQuickSettings() {
+  startActivityForResult(std::make_unique<ReaderQuickSettingsActivity>(renderer, mappedInput),
+                         [this](const ActivityResult& result) {
+                           if (result.isCancelled) {
+                             requestUpdate();
+                             return;
+                           }
+                           ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
+                           mappedInput.setTouchOrientation(SETTINGS.orientation);
+                           section.reset();
+                           pagesUntilFullRefresh = 1;
+                           requestUpdate();
                          });
 }
 
@@ -564,6 +626,7 @@ void EpubReaderActivity::render(RenderLock&& lock) {
   if (currentSpineIndex == epub->getSpineItemsCount()) {
     renderer.clearScreen();
     renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_END_OF_BOOK), true, EpdFontFamily::BOLD);
+    ReaderUtils::drawReaderBackOverlay(renderer, readerBackOverlayVisible);
     renderer.displayBuffer();
     automaticPageTurnActive = false;
     return;
@@ -665,6 +728,7 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     LOG_DBG("ERS", "No pages to render");
     renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_EMPTY_CHAPTER), true, EpdFontFamily::BOLD);
     renderStatusBar();
+    ReaderUtils::drawReaderBackOverlay(renderer, readerBackOverlayVisible);
     renderer.displayBuffer();
     automaticPageTurnActive = false;
     return;
@@ -674,6 +738,7 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     LOG_DBG("ERS", "Page out of bounds: %d (max %d)", section->currentPage, section->pageCount);
     renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_OUT_OF_BOUNDS), true, EpdFontFamily::BOLD);
     renderStatusBar();
+    ReaderUtils::drawReaderBackOverlay(renderer, readerBackOverlayVisible);
     renderer.displayBuffer();
     automaticPageTurnActive = false;
     return;
@@ -785,6 +850,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
   page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop);
   renderer.setRenderMode(GfxRenderer::BW);
   renderStatusBar();
+  ReaderUtils::drawReaderBackOverlay(renderer, readerBackOverlayVisible);
   fcm->logStats("bw_render");
   const auto tBwRender = millis();
 
@@ -798,6 +864,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
       page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop);
       renderer.setRenderMode(GfxRenderer::BW);
       renderStatusBar();
+      ReaderUtils::drawReaderBackOverlay(renderer, readerBackOverlayVisible);
       renderer.displayBuffer(HalDisplay::FAST_REFRESH);
     } else {
       renderer.displayBuffer(HalDisplay::HALF_REFRESH);

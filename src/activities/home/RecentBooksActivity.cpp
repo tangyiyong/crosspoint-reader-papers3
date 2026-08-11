@@ -50,11 +50,25 @@ void RecentBooksActivity::loop() {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
+  const Rect listRect{0, contentTop, pageWidth, contentHeight};
+  const int listSize = static_cast<int>(recentBooks.size());
+  const int pageItems = UITheme::getInstance().getListItemsPerPage(listRect, true);
+
+  if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+    if (pageItems > 0 && listSize > pageItems) {
+      selectorIndex = static_cast<size_t>(
+          mappedInput.wasContentSwipedUp()
+              ? ButtonNavigator::nextPageIndex(static_cast<int>(selectorIndex), listSize, pageItems)
+              : ButtonNavigator::previousPageIndex(static_cast<int>(selectorIndex), listSize, pageItems));
+      requestUpdate();
+      return;
+    }
+  }
 
   if (mappedInput.wasContentTapped()) {
-    const int tappedIndex = UITheme::getInstance().hitTestListItem(
-        Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(recentBooks.size()),
-        static_cast<int>(selectorIndex), true, mappedInput.getTouchX(), mappedInput.getTouchY());
+    const int tappedIndex = UITheme::getInstance().hitTestListItem(listRect, static_cast<int>(recentBooks.size()),
+                                                                   static_cast<int>(selectorIndex), true,
+                                                                   mappedInput.getTouchX(), mappedInput.getTouchY());
     if (tappedIndex >= 0 && tappedIndex < static_cast<int>(recentBooks.size())) {
       selectorIndex = static_cast<size_t>(tappedIndex);
       LOG_DBG("RBA", "Tapped recent book: %s", recentBooks[selectorIndex].path.c_str());
@@ -75,7 +89,6 @@ void RecentBooksActivity::loop() {
     onGoHome();
   }
 
-  int listSize = static_cast<int>(recentBooks.size());
 #if CROSSPOINT_PAPERS3
   // On Paper S3, Up/Down move one row at a time
   if (mappedInput.wasReleased(MappedInputManager::Button::Up)) {
@@ -89,7 +102,6 @@ void RecentBooksActivity::loop() {
     return;
   }
 #else
-  const int pageItems = UITheme::getInstance().getNumberOfItemsPerPage(renderer, true, false, true, true);
   buttonNavigator.onNextRelease([this, listSize] {
     selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), listSize);
     requestUpdate();

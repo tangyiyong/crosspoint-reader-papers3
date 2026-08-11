@@ -33,11 +33,22 @@ void OpdsServerListActivity::loop() {
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
   const int itemCount = getItemCount();
+  const Rect listRect{0, contentTop, pageWidth, contentHeight};
+  const int pageItems = UITheme::getInstance().getListItemsPerPage(listRect, true);
+
+  if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+    if (pageItems > 0 && itemCount > pageItems) {
+      selectedIndex = mappedInput.wasContentSwipedUp()
+                          ? ButtonNavigator::nextPageIndex(selectedIndex, itemCount, pageItems)
+                          : ButtonNavigator::previousPageIndex(selectedIndex, itemCount, pageItems);
+      requestUpdate();
+      return;
+    }
+  }
 
   if (mappedInput.wasContentTapped()) {
-    const int tappedIndex = UITheme::getInstance().hitTestListItem(
-        Rect{0, contentTop, pageWidth, contentHeight}, itemCount, selectedIndex, true, mappedInput.getTouchX(),
-        mappedInput.getTouchY());
+    const int tappedIndex = UITheme::getInstance().hitTestListItem(listRect, itemCount, selectedIndex, true,
+                                                                   mappedInput.getTouchX(), mappedInput.getTouchY());
     if (tappedIndex >= 0) {
       selectedIndex = tappedIndex;
       handleSelection();
