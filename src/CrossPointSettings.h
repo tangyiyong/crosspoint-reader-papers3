@@ -225,7 +225,7 @@ class CrossPointSettings {
   char opdsUsername[64] = "";
   char opdsPassword[64] = "";
   // Hide battery percentage
-  uint8_t hideBatteryPercentage = HIDE_NEVER;
+  uint8_t hideBatteryPercentage = HIDE_ALWAYS;
   // Long-press chapter skip on side buttons
 #if CROSSPOINT_PAPERS3
   uint8_t longPressChapterSkip = 0;
