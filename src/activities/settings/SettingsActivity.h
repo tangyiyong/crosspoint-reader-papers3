@@ -23,6 +23,7 @@ enum class SettingAction {
   ClearCache,
   CheckForUpdates,
   InstallFirmwareFromSd,
+  ClockSync,
   Language,
   ExternalReaderFont,
   UsbMassStorage,

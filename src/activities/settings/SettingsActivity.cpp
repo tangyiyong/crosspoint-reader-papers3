@@ -10,6 +10,7 @@
 #include <variant>
 
 #include "ButtonRemapActivity.h"
+#include "ClockSyncActivity.h"
 #include "ClearCacheActivity.h"
 #include "CrossPointSettings.h"
 #include "FontSelectActivity.h"
@@ -62,6 +63,7 @@ void SettingsActivity::onEnter() {
   controlsSettings.insert(controlsSettings.begin(),
                           SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_CLOCK_SYNC_NOW, SettingAction::ClockSync));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_BROWSER, SettingAction::OPDSBrowser));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache));
@@ -332,6 +334,9 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       case SettingAction::InstallFirmwareFromSd:
         startActivityForResult(std::make_unique<SdFirmwareUpdateActivity>(renderer, mappedInput), resultHandler);
+        break;
+      case SettingAction::ClockSync:
+        startActivityForResult(std::make_unique<ClockSyncActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::UsbMassStorage:
         startActivityForResult(std::make_unique<UsbMassStorageActivity>(renderer, mappedInput), resultHandler);
