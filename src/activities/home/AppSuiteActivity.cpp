@@ -7,6 +7,7 @@
 #include "AppPlaceholderActivity.h"
 #include "ClockCalendarActivity.h"
 #include "DailyQuoteActivity.h"
+#include "HotNewsActivity.h"
 #include "MappedInputManager.h"
 #include "WoodenFishActivity.h"
 #include "activities/settings/OtaUpdateActivity.h"
@@ -36,6 +37,8 @@ StrId AppSuiteActivity::labelFor(const BuiltInApp app) const {
       return StrId::STR_APP_WEATHER;
     case BuiltInApp::DailyQuote:
       return StrId::STR_APP_DAILY_QUOTE;
+    case BuiltInApp::HotNews:
+      return StrId::STR_APP_HOT_NEWS;
     case BuiltInApp::ClockCalendar:
       return StrId::STR_APP_CLOCK_CALENDAR;
     case BuiltInApp::WoodenFish:
@@ -71,6 +74,7 @@ StrId AppSuiteActivity::valueFor(const BuiltInApp app) const {
     case BuiltInApp::Weather:
       return StrId::STR_APP_STAGED;
     case BuiltInApp::DailyQuote:
+    case BuiltInApp::HotNews:
       return StrId::STR_APP_READY;
     case BuiltInApp::Music:
       return StrId::STR_APP_NEEDS_HARDWARE;
@@ -109,6 +113,9 @@ void AppSuiteActivity::activateSelected() {
       break;
     case BuiltInApp::DailyQuote:
       startActivityForResult(std::make_unique<DailyQuoteActivity>(renderer, mappedInput), nullptr);
+      break;
+    case BuiltInApp::HotNews:
+      startActivityForResult(std::make_unique<HotNewsActivity>(renderer, mappedInput), nullptr);
       break;
     case BuiltInApp::ClockCalendar:
       startActivityForResult(std::make_unique<ClockCalendarActivity>(renderer, mappedInput), nullptr);
@@ -207,6 +214,13 @@ void AppSuiteActivity::drawAppIcon(const BuiltInApp app, const int centerX, cons
       renderer.drawLine(left + 11, topY + 15, right - 11, topY + 15, color);
       renderer.drawLine(left + 11, topY + 21, centerX + q, topY + 21, color);
       renderer.drawLine(left + 11, topY + 27, right - 13, topY + 27, color);
+      break;
+    case BuiltInApp::HotNews:
+      renderer.drawRect(left + 5, topY + 5, size - 10, size - 10, color);
+      renderer.drawLine(left + 9, topY + 12, right - 9, topY + 12, color);
+      renderer.drawLine(left + 9, topY + 18, centerX + q, topY + 18, color);
+      renderer.drawLine(left + 9, topY + 24, right - 11, topY + 24, color);
+      renderer.drawLine(left + 9, topY + 30, centerX + q, topY + 30, color);
       break;
     case BuiltInApp::ClockCalendar:
       renderer.drawRect(left + 4, topY + 6, size - 8, size - 10, color);

@@ -17,6 +17,7 @@ class AppSuiteActivity final : public Activity {
     Music,
     Weather,
     DailyQuote,
+    HotNews,
     ClockCalendar,
     WoodenFish,
     FileManager,

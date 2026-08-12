@@ -72,6 +72,7 @@ Feasible as a staged migration. The current project should not import the refere
 - [x] Tighten PaperS3 Lyra top/bottom spacing, add calendar selected-day highlight, WiFi rescan, and reader progress
       long-press jump.
 - [x] Add cached SHWGIJ daily quote display on Home and a refreshable Daily Quote app.
+- [x] Add cached SHWGIJ hot-news app with manual refresh and scrollable news list.
 
 ## Implementation Log
 
@@ -130,3 +131,6 @@ Feasible as a staged migration. The current project should not import the refere
   1500 ms request throttling, date-stamped SD cache at `/.crosspoint/quote/daily.json`, cache-first daily refresh on
   boot/wake and WiFi connect, Home-screen quote rendering above the footer buttons, and a Daily Quote app with manual
   refresh.
+- 2026-08-12: Added `NewsDataClient` for `https://api.shwgij.com/api/news/fastnews/news_rest`, sharing the same SHWGIJ
+  token, applying a 1500 ms request throttle for the free-tier 1 QPS limit, caching under
+  `/.crosspoint/news/hot.json`, and exposing a Hot News app with refresh plus touch/button scrolling.
