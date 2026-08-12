@@ -10,14 +10,26 @@
 #include <string>
 
 #include "CrossPointSettings.h"
+#include "WifiCredentialStore.h"
 #include "network/HttpDownloader.h"
 
 namespace {
 constexpr char CALENDAR_CACHE_DIR[] = "/.crosspoint/calendar";
+constexpr size_t MAX_CALENDAR_CACHE_BYTES = 50000;
+
 void copyJsonString(char* dest, const size_t destSize, JsonVariantConst value) {
   if (destSize == 0) return;
   const char* text = value | "";
   snprintf(dest, destSize, "%s", text);
+}
+
+void replaceAll(std::string& text, const char* pattern, const char* replacement) {
+  size_t pos = text.find(pattern);
+  const size_t patternLen = strlen(pattern);
+  while (pos != std::string::npos) {
+    text.replace(pos, patternLen, replacement);
+    pos = text.find(pattern, pos + strlen(replacement));
+  }
 }
 
 JsonVariantConst findDayObject(JsonDocument& doc, const char* date) {
@@ -47,6 +59,21 @@ JsonVariantConst findDayObject(JsonDocument& doc, const char* date) {
   }
   return JsonVariantConst();
 }
+
+void copyFirstNonEmpty(char* dest, const size_t destSize, JsonVariantConst obj, const char* keyA, const char* keyB) {
+  copyJsonString(dest, destSize, obj[keyA]);
+  if (dest[0] == '\0') {
+    copyJsonString(dest, destSize, obj[keyB]);
+  }
+}
+
+void populateDayInfoFromGenericObject(CalendarDayInfo& outInfo, JsonVariantConst obj) {
+  copyJsonString(outInfo.lunar, sizeof(outInfo.lunar), obj["lunar"]);
+  copyJsonString(outInfo.festival, sizeof(outInfo.festival), obj["festival"]);
+  copyFirstNonEmpty(outInfo.solarTerm, sizeof(outInfo.solarTerm), obj, "solarTerm", "term");
+  copyFirstNonEmpty(outInfo.almanacGood, sizeof(outInfo.almanacGood), obj, "good", "yi");
+  copyFirstNonEmpty(outInfo.almanacBad, sizeof(outInfo.almanacBad), obj, "bad", "ji");
+}
 }  // namespace
 
 bool CalendarDataClient::hasConfiguredApi() { return SETTINGS.calendarApiUrl[0] != '\0'; }
@@ -55,6 +82,77 @@ std::string CalendarDataClient::cachePath(const int year, const int month) {
   char path[64];
   snprintf(path, sizeof(path), "%s/%04d-%02d.json", CALENDAR_CACHE_DIR, year, month);
   return path;
+}
+
+bool CalendarDataClient::isShwgijApi() {
+  const std::string url = SETTINGS.calendarApiUrl;
+  return url.find("api.shwgij.com/api/lunars/lunar") != std::string::npos;
+}
+
+bool CalendarDataClient::ensureWifiConnectedFromSavedCredential() {
+  if (WiFi.status() == WL_CONNECTED) {
+    return true;
+  }
+
+  const std::string ssid = WIFI_STORE.getLastConnectedSsid();
+  if (ssid.empty()) {
+    return false;
+  }
+
+  const auto cred = WIFI_STORE.findCredential(ssid);
+  if (!cred) {
+    return false;
+  }
+
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect(true, true);
+  delay(100);
+  if (cred->password.empty()) {
+    WiFi.begin(cred->ssid.c_str());
+  } else {
+    WiFi.begin(cred->ssid.c_str(), cred->password.c_str());
+  }
+
+  constexpr unsigned long timeoutMs = 8000;
+  const unsigned long startedAt = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startedAt < timeoutMs) {
+    delay(100);
+  }
+  return WiFi.status() == WL_CONNECTED;
+}
+
+std::string CalendarDataClient::buildDayUrl(const int year, const int month, const int day) {
+  std::string url = SETTINGS.calendarApiUrl;
+  char yearBuf[8];
+  char monthBuf[4];
+  char dayBuf[4];
+  char dateBuf[24];
+  snprintf(yearBuf, sizeof(yearBuf), "%04d", year);
+  snprintf(monthBuf, sizeof(monthBuf), "%02d", month);
+  snprintf(dayBuf, sizeof(dayBuf), "%02d", day);
+  snprintf(dateBuf, sizeof(dateBuf), "%04d%02d%02d000000", year, month, day);
+
+  const bool hasYearPlaceholder = url.find("{year}") != std::string::npos;
+  const bool hasMonthPlaceholder = url.find("{month}") != std::string::npos;
+  const bool hasDayPlaceholder = url.find("{day}") != std::string::npos;
+  const bool hasDatePlaceholder = url.find("{date}") != std::string::npos;
+  replaceAll(url, "{year}", yearBuf);
+  replaceAll(url, "{month}", monthBuf);
+  replaceAll(url, "{day}", dayBuf);
+  replaceAll(url, "{date}", dateBuf);
+
+  if (isShwgijApi() || (!hasYearPlaceholder && !hasMonthPlaceholder && !hasDayPlaceholder && !hasDatePlaceholder)) {
+    if (url.find("date=") == std::string::npos) {
+      const char sep = url.find('?') == std::string::npos ? '?' : '&';
+      url += sep;
+      url += "date=";
+      url += dateBuf;
+    } else if (url.rfind("date=") == url.size() - 5) {
+      url += dateBuf;
+    }
+  }
+  return url;
 }
 
 std::string CalendarDataClient::buildMonthUrl(const int year, const int month) {
@@ -87,6 +185,20 @@ bool CalendarDataClient::syncMonth(const int year, const int month) {
     return false;
   }
 
+  if (isShwgijApi()) {
+    struct tm timeinfo;
+    const time_t now = time(nullptr);
+    if (now > 1700000000) {
+      const int offsetQuarterHours = static_cast<int>(SETTINGS.clockUtcOffsetQ) - 48;
+      const time_t localNow = now + offsetQuarterHours * 15 * 60;
+      gmtime_r(&localNow, &timeinfo);
+      if (timeinfo.tm_year + 1900 == year && timeinfo.tm_mon + 1 == month) {
+        return syncShwgijDay(year, month, timeinfo.tm_mday);
+      }
+    }
+    return false;
+  }
+
   std::string body;
   const std::string url = buildMonthUrl(year, month);
   if (!HttpDownloader::fetchUrl(url, body)) {
@@ -94,7 +206,7 @@ bool CalendarDataClient::syncMonth(const int year, const int month) {
     return false;
   }
 
-  if (body.empty() || body.size() > 50000) {
+  if (body.empty() || body.size() > MAX_CALENDAR_CACHE_BYTES) {
     LOG_ERR("CAL", "Invalid calendar API response size: %zu", body.size());
     return false;
   }
@@ -103,6 +215,109 @@ bool CalendarDataClient::syncMonth(const int year, const int month) {
   Storage.mkdir(CALENDAR_CACHE_DIR);
   const std::string path = cachePath(year, month);
   return Storage.writeFile(path.c_str(), String(body.c_str()));
+}
+
+bool CalendarDataClient::syncDay(const int year, const int month, const int day, const bool allowSavedWifiConnect) {
+  if (!hasConfiguredApi() || year <= 0 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return false;
+  }
+  if (WiFi.status() != WL_CONNECTED && (!allowSavedWifiConnect || !ensureWifiConnectedFromSavedCredential())) {
+    return false;
+  }
+  if (isShwgijApi()) {
+    return syncShwgijDay(year, month, day);
+  }
+  return syncMonth(year, month);
+}
+
+bool CalendarDataClient::syncShwgijDay(const int year, const int month, const int day) {
+  std::string body;
+  const std::string url = buildDayUrl(year, month, day);
+  if (!HttpDownloader::fetchUrl(url, body)) {
+    LOG_ERR("CAL", "Failed to fetch lunar day API");
+    return false;
+  }
+
+  if (body.empty() || body.size() > 12000) {
+    LOG_ERR("CAL", "Invalid lunar day response size: %zu", body.size());
+    return false;
+  }
+
+  JsonDocument responseDoc;
+  const DeserializationError responseError = deserializeJson(responseDoc, body);
+  if (responseError) {
+    LOG_ERR("CAL", "Lunar API JSON parse failed: %s", responseError.c_str());
+    return false;
+  }
+
+  const int code = responseDoc["code"] | 0;
+  if (code != 200 && code != 201) {
+    LOG_ERR("CAL", "Lunar API returned code: %d", code);
+    return false;
+  }
+
+  const JsonObjectConst data = responseDoc["data"].as<JsonObjectConst>();
+  if (data.isNull()) {
+    LOG_ERR("CAL", "Lunar API response has no data object");
+    return false;
+  }
+
+  JsonDocument cacheDoc;
+  const std::string path = cachePath(year, month);
+  if (Storage.exists(path.c_str())) {
+    const String cached = Storage.readFile(path.c_str());
+    if (!cached.isEmpty()) {
+      const DeserializationError cacheError = deserializeJson(cacheDoc, cached);
+      if (cacheError) {
+        LOG_ERR("CAL", "Calendar cache reset after parse failure: %s", cacheError.c_str());
+        cacheDoc.clear();
+      }
+    }
+  }
+
+  char dateKey[11];
+  snprintf(dateKey, sizeof(dateKey), "%04d-%02d-%02d", year, month, day);
+  JsonObject days = cacheDoc["days"].to<JsonObject>();
+  JsonObject item = days[dateKey].to<JsonObject>();
+  item["date"] = dateKey;
+  item["lunar"] = data["Lunar"] | "";
+  item["festival"] = data["Festivals"] | "";
+  if (strlen(item["festival"] | "") == 0) {
+    item["festival"] = data["OtherFestivals"] | "";
+  }
+  if (strlen(item["festival"] | "") == 0) {
+    item["festival"] = data["Lunar_Festivals"] | "";
+  }
+  if (strlen(item["festival"] | "") == 0) {
+    item["festival"] = data["Lunar_OtherFestivals"] | "";
+  }
+  item["solarTerm"] = data["JieQi1"] | "";
+  if (strlen(item["solarTerm"] | "") == 0) {
+    item["solarTerm"] = data["SanFu"] | "";
+  }
+  if (strlen(item["solarTerm"] | "") == 0) {
+    item["solarTerm"] = data["ShuJiu"] | "";
+  }
+  item["good"] = data["YiDay"] | "";
+  item["bad"] = data["JiDay"] | "";
+  item["solar"] = data["Solar"] | "";
+  item["week"] = data["Week"] | "";
+  item["constellation"] = data["Constellation"] | "";
+  item["lunarYear"] = data["LunarYear"] | "";
+  item["ganZhiYear"] = data["GanZhiYear"] | "";
+  item["zodiac"] = data["ThisYear"] | "";
+  item["quoteShort"] = data["WeiYu_s"] | "";
+
+  std::string out;
+  serializeJson(cacheDoc, out);
+  if (out.empty() || out.size() > MAX_CALENDAR_CACHE_BYTES) {
+    LOG_ERR("CAL", "Merged calendar cache too large: %zu", out.size());
+    return false;
+  }
+
+  Storage.mkdir("/.crosspoint");
+  Storage.mkdir(CALENDAR_CACHE_DIR);
+  return Storage.writeFile(path.c_str(), String(out.c_str()));
 }
 
 bool CalendarDataClient::loadDayInfo(const int year, const int month, const int day, CalendarDayInfo& outInfo) {
@@ -137,20 +352,7 @@ bool CalendarDataClient::loadDayInfo(const int year, const int month, const int 
     return false;
   }
 
-  copyJsonString(outInfo.lunar, sizeof(outInfo.lunar), obj["lunar"]);
-  copyJsonString(outInfo.festival, sizeof(outInfo.festival), obj["festival"]);
-  copyJsonString(outInfo.solarTerm, sizeof(outInfo.solarTerm), obj["solarTerm"]);
-  if (outInfo.solarTerm[0] == '\0') {
-    copyJsonString(outInfo.solarTerm, sizeof(outInfo.solarTerm), obj["term"]);
-  }
-  copyJsonString(outInfo.almanacGood, sizeof(outInfo.almanacGood), obj["good"]);
-  if (outInfo.almanacGood[0] == '\0') {
-    copyJsonString(outInfo.almanacGood, sizeof(outInfo.almanacGood), obj["yi"]);
-  }
-  copyJsonString(outInfo.almanacBad, sizeof(outInfo.almanacBad), obj["bad"]);
-  if (outInfo.almanacBad[0] == '\0') {
-    copyJsonString(outInfo.almanacBad, sizeof(outInfo.almanacBad), obj["ji"]);
-  }
+  populateDayInfoFromGenericObject(outInfo, obj);
 
   outInfo.hasAny = outInfo.lunar[0] != '\0' || outInfo.festival[0] != '\0' || outInfo.solarTerm[0] != '\0' ||
                    outInfo.almanacGood[0] != '\0' || outInfo.almanacBad[0] != '\0';

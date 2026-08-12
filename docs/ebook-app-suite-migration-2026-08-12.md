@@ -65,6 +65,7 @@ Feasible as a staged migration. The current project should not import the refere
 - [x] Add reader quick-bar Jump entry and percent slider access.
 - [x] Replace the clock/date placeholder with a tappable monthly calendar view.
 - [x] Add calendar API settings, monthly cache sync, and optional boot/wake WiFi auto-connect.
+- [x] Add SHWGIJ lunar/almanac day API adapter with per-day sync and offline month cache merge.
 
 ## Implementation Log
 
@@ -99,3 +100,10 @@ Feasible as a staged migration. The current project should not import the refere
   `days: [{date,lunar,festival,solarTerm,good,bad}]`, `data: [...]`, or date-keyed `days`/`data` objects.
 - 2026-08-12: Added optional boot/wake WiFi auto-connect using the saved last-connected SSID. On success it syncs NTP and
   attempts to refresh the current month calendar cache; on failure it times out and continues normal boot.
+- 2026-08-12: Added an adapter for `api.shwgij.com/api/lunars/lunar`. When `calendarApiUrl` points to that endpoint,
+  the firmware appends or fills `date=YYYYMMDD000000`, accepts normal success code `201`, maps `data.Lunar`,
+  `Festivals`/`OtherFestivals`, `JieQi1`/`SanFu`/`ShuJiu`, `YiDay`, and `JiDay` into the existing day detail model,
+  and merges each fetched day into `/.crosspoint/calendar/YYYY-MM.json` for offline reuse.
+- 2026-08-12: Changed day-detail opening so tapping a date first attempts a saved-WiFi reconnect if needed, refreshes that
+  exact day from the configured API, then shows cached details. This avoids bulk-fetching a whole month from single-day
+  free APIs while still preserving offline display after the first successful read.

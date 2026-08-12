@@ -128,17 +128,14 @@ void ClockCalendarActivity::loop() {
   }
 
   if (mappedInput.wasPressed(MappedInputManager::Button::Confirm) && selectedDay > 0) {
-    showingDayDetail = true;
-    requestUpdate();
+    openDayDetail(selectedDay);
     return;
   }
 
   if (mappedInput.wasContentTapped()) {
     const int day = hitTestDay(mappedInput.getTouchX(), mappedInput.getTouchY());
     if (day > 0) {
-      selectedDay = day;
-      showingDayDetail = true;
-      requestUpdate();
+      openDayDetail(day);
     }
   }
 }
@@ -192,6 +189,22 @@ void ClockCalendarActivity::syncDisplayedMonthIfNeeded() {
   requestUpdate();
 }
 
+void ClockCalendarActivity::openDayDetail(const int day) {
+  if (day <= 0) {
+    return;
+  }
+
+  selectedDay = day;
+  if (CalendarDataClient::hasConfiguredApi()) {
+    daySyncing = true;
+    requestUpdateAndWait();
+    CalendarDataClient::syncDay(displayYear, displayMonth, selectedDay);
+    daySyncing = false;
+  }
+  showingDayDetail = true;
+  requestUpdate();
+}
+
 int ClockCalendarActivity::hitTestDay(const int touchX, const int touchY) const {
   if (displayYear <= 0 || displayMonth <= 0) {
     return 0;
@@ -235,7 +248,8 @@ void ClockCalendarActivity::drawMonthCalendar() const {
   }
   renderer.drawCenteredText(UI_12_FONT_ID, titleY, monthBuf, true, EpdFontFamily::BOLD);
   renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, titleY + 32,
-                    monthSyncing ? tr(STR_CALENDAR_SYNCING) : (hasTime ? timeBuf : tr(STR_CLOCK_UNAVAILABLE)));
+                    (monthSyncing || daySyncing) ? tr(STR_CALENDAR_SYNCING)
+                                                 : (hasTime ? timeBuf : tr(STR_CLOCK_UNAVAILABLE)));
   const char* rightText = hasDate ? dateBuf : tr(STR_DATE_UNAVAILABLE);
   const int dateWidth = renderer.getTextWidth(UI_10_FONT_ID, rightText);
   renderer.drawText(UI_10_FONT_ID, pageWidth - metrics.contentSidePadding - dateWidth, titleY + 32, rightText);

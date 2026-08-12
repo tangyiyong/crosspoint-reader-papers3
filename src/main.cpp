@@ -53,7 +53,7 @@ void syncCurrentCalendarMonthFromSystemTime() {
   const time_t localNow = now + offsetQuarterHours * 15 * 60;
   struct tm timeinfo;
   gmtime_r(&localNow, &timeinfo);
-  CalendarDataClient::syncMonth(timeinfo.tm_year + 1900, timeinfo.tm_mon + 1);
+  CalendarDataClient::syncDay(timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday, false);
 }
 
 void autoConnectWifiOnBootIfEnabled() {
