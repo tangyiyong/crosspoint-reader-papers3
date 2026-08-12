@@ -21,7 +21,9 @@ class CalendarDataClient {
 
  private:
   static bool ensureWifiConnectedFromSavedCredential();
+  static bool hasCachedDay(int year, int month, int day);
   static bool isShwgijApi();
+  static void waitForApiRateLimit();
   static bool syncShwgijDay(int year, int month, int day);
   static std::string buildDayUrl(int year, int month, int day);
   static std::string buildMonthUrl(int year, int month);

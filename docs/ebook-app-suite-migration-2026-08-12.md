@@ -66,6 +66,7 @@ Feasible as a staged migration. The current project should not import the refere
 - [x] Replace the clock/date placeholder with a tappable monthly calendar view.
 - [x] Add calendar API settings, monthly cache sync, and optional boot/wake WiFi auto-connect.
 - [x] Add SHWGIJ lunar/almanac day API adapter with per-day sync and offline month cache merge.
+- [x] Add SHWGIJ API cache-first access and request throttling for free-tier limits.
 
 ## Implementation Log
 
@@ -107,3 +108,6 @@ Feasible as a staged migration. The current project should not import the refere
 - 2026-08-12: Changed day-detail opening so tapping a date first attempts a saved-WiFi reconnect if needed, refreshes that
   exact day from the configured API, then shows cached details. This avoids bulk-fetching a whole month from single-day
   free APIs while still preserving offline display after the first successful read.
+- 2026-08-12: Added cache-first access for day sync and a 1500 ms minimum interval between SHWGIJ HTTP requests. This keeps
+  repeated date taps well below the free-tier limit of 10 requests per second and avoids consuming daily quota for dates
+  that are already cached on SD.

@@ -16,6 +16,8 @@
 namespace {
 constexpr char CALENDAR_CACHE_DIR[] = "/.crosspoint/calendar";
 constexpr size_t MAX_CALENDAR_CACHE_BYTES = 50000;
+constexpr unsigned long SHWGIJ_MIN_REQUEST_INTERVAL_MS = 1500;
+unsigned long lastCalendarRequestAt = 0;
 
 void copyJsonString(char* dest, const size_t destSize, JsonVariantConst value) {
   if (destSize == 0) return;
@@ -122,6 +124,19 @@ bool CalendarDataClient::ensureWifiConnectedFromSavedCredential() {
   return WiFi.status() == WL_CONNECTED;
 }
 
+bool CalendarDataClient::hasCachedDay(const int year, const int month, const int day) {
+  CalendarDayInfo cached;
+  return loadDayInfo(year, month, day, cached);
+}
+
+void CalendarDataClient::waitForApiRateLimit() {
+  const unsigned long now = millis();
+  if (lastCalendarRequestAt != 0 && now - lastCalendarRequestAt < SHWGIJ_MIN_REQUEST_INTERVAL_MS) {
+    delay(SHWGIJ_MIN_REQUEST_INTERVAL_MS - (now - lastCalendarRequestAt));
+  }
+  lastCalendarRequestAt = millis();
+}
+
 std::string CalendarDataClient::buildDayUrl(const int year, const int month, const int day) {
   std::string url = SETTINGS.calendarApiUrl;
   char yearBuf[8];
@@ -221,6 +236,9 @@ bool CalendarDataClient::syncDay(const int year, const int month, const int day,
   if (!hasConfiguredApi() || year <= 0 || month < 1 || month > 12 || day < 1 || day > 31) {
     return false;
   }
+  if (hasCachedDay(year, month, day)) {
+    return true;
+  }
   if (WiFi.status() != WL_CONNECTED && (!allowSavedWifiConnect || !ensureWifiConnectedFromSavedCredential())) {
     return false;
   }
@@ -231,8 +249,13 @@ bool CalendarDataClient::syncDay(const int year, const int month, const int day,
 }
 
 bool CalendarDataClient::syncShwgijDay(const int year, const int month, const int day) {
+  if (hasCachedDay(year, month, day)) {
+    return true;
+  }
+
   std::string body;
   const std::string url = buildDayUrl(year, month, day);
+  waitForApiRateLimit();
   if (!HttpDownloader::fetchUrl(url, body)) {
     LOG_ERR("CAL", "Failed to fetch lunar day API");
     return false;
