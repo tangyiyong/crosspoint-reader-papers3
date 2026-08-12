@@ -18,6 +18,8 @@ namespace {
 constexpr char QUOTE_CACHE_DIR[] = "/.crosspoint/quote";
 constexpr char QUOTE_CACHE_PATH[] = "/.crosspoint/quote/daily.json";
 constexpr char SHWGIJ_QUOTE_API_URL[] = "https://api.shwgij.com/api/randtext/get";
+constexpr uint8_t SHWGIJ_QUOTE_TYPE_MIN = 1;
+constexpr uint8_t SHWGIJ_QUOTE_TYPE_COUNT = 14;
 constexpr unsigned long SHWGIJ_MIN_REQUEST_INTERVAL_MS = 1500;
 unsigned long lastQuoteRequestAt = 0;
 
@@ -92,9 +94,12 @@ void QuoteDataClient::waitForApiRateLimit() {
 
 std::string QuoteDataClient::buildUrl(const bool dailyMode) {
   std::string url = SHWGIJ_QUOTE_API_URL;
+  const uint8_t quoteType = SHWGIJ_QUOTE_TYPE_MIN + static_cast<uint8_t>(esp_random() % SHWGIJ_QUOTE_TYPE_COUNT);
+  char suffix[24];
+  snprintf(suffix, sizeof(suffix), "&type=%u&m=%u", quoteType, dailyMode ? 1 : 0);
   url += "?key=";
   url += SETTINGS.calendarApiToken;
-  url += dailyMode ? "&type=1&m=1" : "&type=1&m=0";
+  url += suffix;
   return url;
 }
 
