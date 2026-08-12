@@ -201,6 +201,13 @@ void EpubReaderActivity::loop() {
     return;
   }
 
+  if (ReaderUtils::isStatusProgressLongPress(renderer, mappedInput)) {
+    readerMenuLongPressHandled = true;
+    readerBackOverlayVisible = false;
+    openPercentJump();
+    return;
+  }
+
   const bool menuPressActive = mappedInput.isPressed(MappedInputManager::Button::Confirm);
   if (!menuPressActive) {
     readerMenuLongPressHandled = false;

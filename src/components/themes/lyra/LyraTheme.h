@@ -42,7 +42,7 @@ constexpr ThemeMetrics values = {.batteryWidth = 16,
 #endif
                                  .homeRecentBooksCount = 1,
 #if CROSSPOINT_PAPERS3
-                                 .buttonHintsHeight = 80,
+                                 .buttonHintsHeight = 56,
                                  .sideButtonHintsWidth = 0,
 #else
                                  .buttonHintsHeight = 40,
@@ -52,7 +52,7 @@ constexpr ThemeMetrics values = {.batteryWidth = 16,
                                  .progressBarMarginTop = 1,
                                  .statusBarHorizontalMargin = 5,
 #if CROSSPOINT_PAPERS3
-                                 .statusBarVerticalMargin = 34,
+                                 .statusBarVerticalMargin = 22,
 #else
                                  .statusBarVerticalMargin = 19,
 #endif

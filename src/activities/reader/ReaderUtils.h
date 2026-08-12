@@ -13,6 +13,7 @@ namespace ReaderUtils {
 
 constexpr unsigned long GO_HOME_MS = 1000;
 constexpr unsigned long READER_MENU_LONG_PRESS_MS = 650;
+constexpr unsigned long STATUS_PROGRESS_LONG_PRESS_MS = 650;
 
 inline void applyOrientation(GfxRenderer& renderer, const uint8_t orientation) {
   switch (orientation) {
@@ -66,6 +67,29 @@ inline bool wasBackRevealGesture(const MappedInputManager& input) { return input
 inline bool wasBackOverlayTap(const MappedInputManager& input) { return input.wasReaderTapTop(); }
 
 inline bool wasMenuGesture(const MappedInputManager& input) { return input.wasReaderSwipeUpFromBottomEdge(); }
+
+inline bool isStatusProgressLongPress(const GfxRenderer& renderer, const MappedInputManager& input) {
+  if (!input.isPressed(MappedInputManager::Button::Confirm) || input.getHeldTime() < STATUS_PROGRESS_LONG_PRESS_MS) {
+    return false;
+  }
+  if (!SETTINGS.statusBarBookProgressPercentage && !SETTINGS.statusBarChapterPageCount) {
+    return false;
+  }
+
+  const int screenWidth = renderer.getScreenWidth();
+  const int screenHeight = renderer.getScreenHeight();
+  int orientedMarginTop;
+  int orientedMarginRight;
+  int orientedMarginBottom;
+  int orientedMarginLeft;
+  renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
+                                   &orientedMarginLeft);
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int statusBarHeight = UITheme::getInstance().getStatusBarHeight();
+  const int hotLeft = std::max(0, screenWidth - orientedMarginRight - 190);
+  const int hotTop = std::max(0, screenHeight - orientedMarginBottom - statusBarHeight - metrics.statusBarVerticalMargin);
+  return input.getTouchX() >= hotLeft && input.getTouchY() >= hotTop;
+}
 
 inline int quickBarButtonWidth(const GfxRenderer& renderer) {
   return renderer.getScreenWidth() / 4;

@@ -286,16 +286,20 @@ void ClockCalendarActivity::drawMonthCalendar() const {
     const int x = grid.x + col * cellW;
     const int y = grid.y + headerHeight + row * cellH;
     const bool isToday = displayYear == todayYear && displayMonth == todayMonth && day == todayDay;
+    const bool isSelected = day == selectedDay;
     char dayBuf[4];
     snprintf(dayBuf, sizeof(dayBuf), "%d", day);
 
     if (isToday) {
       renderer.fillRect(x + 2, y + 2, cellW - 4, cellH - 4);
     }
+    if (isSelected) {
+      renderer.drawRect(x + 3, y + 3, cellW - 6, cellH - 6, 2, true);
+    }
     const int textWidth = renderer.getTextWidth(UI_12_FONT_ID, dayBuf);
     renderer.drawText(UI_12_FONT_ID, x + (cellW - textWidth) / 2,
                       y + (cellH - renderer.getLineHeight(UI_12_FONT_ID)) / 2, dayBuf, !isToday,
-                      isToday ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
+                      (isToday || isSelected) ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
   }
 
   if (showingDayDetail) {

@@ -95,7 +95,7 @@ constexpr ThemeMetrics values = {.batteryWidth = 15,
                                  .progressBarMarginTop = 1,
                                  .statusBarHorizontalMargin = 5,
 #if CROSSPOINT_PAPERS3
-                                 .statusBarVerticalMargin = 34,
+                                 .statusBarVerticalMargin = 22,
 #else
                                  .statusBarVerticalMargin = 19,
 #endif

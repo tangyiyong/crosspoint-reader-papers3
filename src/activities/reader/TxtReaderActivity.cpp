@@ -181,6 +181,13 @@ void TxtReaderActivity::loop() {
     return;
   }
 
+  if (ReaderUtils::isStatusProgressLongPress(renderer, mappedInput)) {
+    readerMenuLongPressHandled = true;
+    readerBackOverlayVisible = false;
+    openPercentJump();
+    return;
+  }
+
   // Long press BACK (1s+) goes to file selection
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
     activityManager.goToFileBrowser(txt ? txt->getPath() : "");

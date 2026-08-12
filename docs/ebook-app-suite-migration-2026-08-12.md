@@ -69,6 +69,8 @@ Feasible as a staged migration. The current project should not import the refere
 - [x] Add SHWGIJ API cache-first access and request throttling for free-tier limits.
 - [x] Make SHWGIJ the built-in calendar API and expose only the API token in settings.
 - [x] Redraw header WiFi status as a larger high-contrast icon and keep battery percentage hidden by default.
+- [x] Tighten PaperS3 Lyra top/bottom spacing, add calendar selected-day highlight, WiFi rescan, and reader progress
+      long-press jump.
 
 ## Implementation Log
 
@@ -119,3 +121,7 @@ Feasible as a staged migration. The current project should not import the refere
   override for custom providers.
 - 2026-08-12: Replaced the scaled WiFi bitmap in Base/Lyra headers with direct 20x18 two-pixel arc drawing plus a clear
   diagonal disconnected mark. Confirmed `hideBatteryPercentage` remains defaulted to `HIDE_ALWAYS`.
+- 2026-08-12: Reduced PaperS3 status/footer reserved spacing in the Lyra metrics to remove excess blank bands, added a
+  selected-day border in `ClockCalendarActivity`, made saved WiFi entries connect directly while reserving Right for
+  rescan and Left for forget, and added a bottom-right reader status long-press hit area that opens the percent jump UI
+  for EPUB/TXT.

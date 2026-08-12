@@ -175,8 +175,8 @@ void WifiSelectionActivity::selectNetwork(const int index) {
 
   // Check if we have saved credentials for this network
   const auto savedCred = WIFI_STORE.findCredential(selectedSSID);
-  if (savedCred && !savedCred->password.empty()) {
-    // Use saved password - connect directly
+  if (savedCred) {
+    // Use saved credentials - connect directly, including saved open networks.
     enteredPassword = savedCred->password;
     usedSavedPassword = true;
     LOG_DBG("WiFi", "Using saved password for %s, length: %zu", selectedSSID.c_str(), enteredPassword.size());
@@ -446,6 +446,22 @@ void WifiSelectionActivity::loop() {
       }
     }
 
+    if (mappedInput.wasPressed(MappedInputManager::Button::Right)) {
+      startWifiScan();
+      return;
+    }
+
+    if (mappedInput.wasPressed(MappedInputManager::Button::Left)) {
+      const bool hasSavedPassword = !networks.empty() && networks[selectedNetworkIndex].hasSavedPassword;
+      if (hasSavedPassword) {
+        selectedSSID = networks[selectedNetworkIndex].ssid;
+        state = WifiSelectionState::FORGET_PROMPT;
+        forgetPromptSelection = 0;
+        requestUpdate();
+      }
+      return;
+    }
+
     // Check for Back button to exit (cancel)
     if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
       onComplete(false);
@@ -462,13 +478,12 @@ void WifiSelectionActivity::loop() {
       return;
     }
 
-    // Handle navigation
-    buttonNavigator.onNext([this] {
+    buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Down}, [this] {
       selectedNetworkIndex = ButtonNavigator::nextIndex(selectedNetworkIndex, networks.size());
       requestUpdate();
     });
 
-    buttonNavigator.onPrevious([this] {
+    buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Up}, [this] {
       selectedNetworkIndex = ButtonNavigator::previousIndex(selectedNetworkIndex, networks.size());
       requestUpdate();
     });
@@ -572,7 +587,7 @@ void WifiSelectionActivity::renderNetworkList() const {
   const bool hasSavedPassword = !networks.empty() && networks[selectedNetworkIndex].hasSavedPassword;
   const char* forgetLabel = hasSavedPassword ? tr(STR_FORGET_BUTTON) : "";
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_CONNECT), forgetLabel, tr(STR_RETRY));
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_CONNECT), forgetLabel, tr(STR_SCAN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 }
 
