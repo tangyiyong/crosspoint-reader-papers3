@@ -6,6 +6,7 @@
 #include <HalPowerManager.h>
 #include <HalStorage.h>
 #include <Logging.h>
+#include <WiFi.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -22,6 +23,25 @@ constexpr int batteryPercentSpacing = BaseTheme::batteryPercentSpacing;
 constexpr int homeMenuMargin = 20;
 constexpr int homeMarginTop = 30;
 constexpr int subtitleY = 738;
+
+bool isWifiConnected() {
+  return WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0);
+}
+
+void drawHeaderClock(const GfxRenderer& renderer, const Rect rect, const int y) {
+  if (!halClock.isAvailable()) return;
+
+  char timeBuf[6];
+  if (!halClock.formatTime(timeBuf, sizeof(timeBuf), SETTINGS.clockUtcOffsetQ, false)) return;
+
+  const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, timeBuf);
+  renderer.drawText(SMALL_FONT_ID, rect.x + (rect.width - textWidth) / 2, y, timeBuf);
+}
+
+void drawHeaderWifiStatus(const GfxRenderer& renderer, const int x, const int y) {
+  const bool connected = isWifiConnected();
+  renderer.drawText(SMALL_FONT_ID, x, y, connected ? "WiFi" : "WiFi--");
+}
 
 // Helper: draw battery icon at given position
 void drawBatteryIcon(const GfxRenderer& renderer, int x, int y, int battWidth, int rectHeight, uint16_t percentage) {
@@ -313,6 +333,8 @@ void BaseTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
   drawBatteryRight(renderer,
                    Rect{batteryX, rect.y + 5, BaseMetrics::values.batteryWidth, BaseMetrics::values.batteryHeight},
                    showBatteryPercentage);
+  drawHeaderClock(renderer, rect, rect.y + 5);
+  drawHeaderWifiStatus(renderer, batteryX - (showBatteryPercentage ? 66 : 46), rect.y + 5);
 
   if (title) {
     int padding = rect.width - batteryX + BaseMetrics::values.batteryWidth;

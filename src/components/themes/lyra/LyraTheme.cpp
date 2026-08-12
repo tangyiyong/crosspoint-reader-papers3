@@ -1,9 +1,11 @@
 #include "LyraTheme.h"
 
 #include <GfxRenderer.h>
+#include <HalClock.h>
 #include <HalPowerManager.h>
 #include <HalStorage.h>
 #include <I18n.h>
+#include <WiFi.h>
 
 #include <cstdint>
 #include <string>
@@ -40,6 +42,24 @@ constexpr int mainMenuIconSize = 32;
 constexpr int listIconSize = 24;
 constexpr int mainMenuColumns = 2;
 int coverWidth = 0;
+
+bool isWifiConnected() {
+  return WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0);
+}
+
+void drawHeaderClock(const GfxRenderer& renderer, const Rect rect) {
+  if (!halClock.isAvailable()) return;
+
+  char timeBuf[6];
+  if (!halClock.formatTime(timeBuf, sizeof(timeBuf), SETTINGS.clockUtcOffsetQ, false)) return;
+
+  const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, timeBuf);
+  renderer.drawText(SMALL_FONT_ID, rect.x + (rect.width - textWidth) / 2, rect.y + 5, timeBuf);
+}
+
+void drawHeaderWifiStatus(const GfxRenderer& renderer, const int x, const int y) {
+  renderer.drawText(SMALL_FONT_ID, x, y, isWifiConnected() ? "WiFi" : "WiFi--");
+}
 
 const uint8_t* iconForName(UIIcon icon, int size) {
   if (size == 24) {
@@ -153,6 +173,8 @@ void LyraTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
   drawBatteryRight(renderer,
                    Rect{batteryX, rect.y + 5, LyraMetrics::values.batteryWidth, LyraMetrics::values.batteryHeight},
                    showBatteryPercentage);
+  drawHeaderClock(renderer, rect);
+  drawHeaderWifiStatus(renderer, batteryX - (showBatteryPercentage ? 66 : 46), rect.y + 5);
 
   int maxTitleWidth =
       rect.width - LyraMetrics::values.contentSidePadding * 2 - (subtitle != nullptr ? maxSubtitleWidth : 0);
