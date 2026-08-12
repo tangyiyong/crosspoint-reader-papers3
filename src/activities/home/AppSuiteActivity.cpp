@@ -141,6 +141,97 @@ int AppSuiteActivity::hitTestGrid(const Rect rect, const int touchX, const int t
   return itemIndex < itemCount() ? itemIndex : -1;
 }
 
+void AppSuiteActivity::drawAppIcon(const BuiltInApp app, const int centerX, const int topY, const int size,
+                                   const bool selected) const {
+  const bool color = !selected;
+  const int left = centerX - size / 2;
+  const int right = centerX + size / 2;
+  const int midY = topY + size / 2;
+  const int bottom = topY + size;
+  const int q = size / 4;
+  const int h = size / 2;
+
+  switch (app) {
+    case BuiltInApp::Reader:
+    case BuiltInApp::RecentBooks:
+      renderer.drawRect(left + 2, topY + 2, h - 2, size - 4, color);
+      renderer.drawRect(centerX, topY + 2, h - 2, size - 4, color);
+      renderer.drawLine(centerX, topY + 4, centerX, bottom - 4, color);
+      break;
+    case BuiltInApp::Gallery:
+      renderer.drawRect(left + 2, topY + 4, size - 4, size - 8, color);
+      renderer.drawLine(left + 6, bottom - 8, centerX - 2, midY + 2, color);
+      renderer.drawLine(centerX - 2, midY + 2, right - 6, bottom - 8, color);
+      renderer.drawRect(right - 11, topY + 8, 5, 5, color);
+      break;
+    case BuiltInApp::Notepad:
+      renderer.drawRect(left + 5, topY + 2, size - 10, size - 4, color);
+      renderer.drawLine(left + 9, topY + 9, right - 9, topY + 9, color);
+      renderer.drawLine(left + 9, topY + 16, right - 9, topY + 16, color);
+      renderer.drawLine(left + 9, topY + 23, right - 13, topY + 23, color);
+      break;
+    case BuiltInApp::Drawing:
+      renderer.drawLine(left + 7, bottom - 7, right - 8, topY + 8, 3, color);
+      renderer.drawLine(left + 5, bottom - 5, left + 11, bottom - 8, color);
+      renderer.drawRect(right - 10, topY + 5, 6, 6, color);
+      break;
+    case BuiltInApp::Music:
+      renderer.drawLine(centerX - 3, topY + 8, centerX - 3, bottom - 8, color);
+      renderer.drawLine(centerX - 3, topY + 8, right - 7, topY + 5, color);
+      renderer.drawLine(right - 7, topY + 5, right - 7, bottom - 12, color);
+      renderer.drawRect(left + 6, bottom - 10, 8, 6, color);
+      renderer.drawRect(right - 12, bottom - 14, 8, 6, color);
+      break;
+    case BuiltInApp::Weather:
+      renderer.drawRect(left + 7, midY - 2, size - 14, q + 3, color);
+      renderer.drawLine(left + 10, midY - 5, left + 15, midY - 10, color);
+      renderer.drawLine(left + 15, midY - 10, centerX, midY - 7, color);
+      renderer.drawLine(centerX, midY - 7, right - 10, midY - 3, color);
+      renderer.drawLine(left + 11, bottom - 8, left + 8, bottom - 4, color);
+      renderer.drawLine(centerX, bottom - 8, centerX - 3, bottom - 4, color);
+      renderer.drawLine(right - 11, bottom - 8, right - 14, bottom - 4, color);
+      break;
+    case BuiltInApp::ClockCalendar:
+      renderer.drawRect(left + 4, topY + 6, size - 8, size - 10, color);
+      renderer.drawLine(left + 4, topY + 14, right - 4, topY + 14, color);
+      renderer.drawLine(centerX, midY - 2, centerX, midY + 7, color);
+      renderer.drawLine(centerX, midY + 7, right - 10, midY + 7, color);
+      break;
+    case BuiltInApp::WoodenFish:
+      renderer.drawRect(left + 3, midY - 8, size - 6, 16, 2, color);
+      renderer.drawLine(left + 8, midY, right - 8, midY, color);
+      renderer.drawLine(centerX + q, topY + 5, right - 3, topY + 12, color);
+      break;
+    case BuiltInApp::FileManager:
+      renderer.drawRect(left + 4, topY + 9, size - 8, size - 13, color);
+      renderer.drawLine(left + 4, topY + 9, left + 12, topY + 3, color);
+      renderer.drawLine(left + 12, topY + 3, centerX, topY + 9, color);
+      break;
+    case BuiltInApp::FileTransfer:
+      renderer.drawRect(left + 5, topY + 5, size - 10, size - 10, color);
+      renderer.drawLine(centerX, topY + 10, centerX, bottom - 10, color);
+      renderer.drawLine(centerX, topY + 10, centerX - 5, topY + 15, color);
+      renderer.drawLine(centerX, topY + 10, centerX + 5, topY + 15, color);
+      renderer.drawLine(centerX, bottom - 10, centerX - 5, bottom - 15, color);
+      renderer.drawLine(centerX, bottom - 10, centerX + 5, bottom - 15, color);
+      break;
+    case BuiltInApp::Update:
+      renderer.drawRect(left + 5, topY + 5, size - 10, size - 10, color);
+      renderer.drawLine(centerX, topY + 10, centerX, bottom - 12, color);
+      renderer.drawLine(centerX, topY + 10, centerX - 6, topY + 17, color);
+      renderer.drawLine(centerX, topY + 10, centerX + 6, topY + 17, color);
+      renderer.drawLine(left + 10, bottom - 8, right - 10, bottom - 8, color);
+      break;
+    case BuiltInApp::Settings:
+      renderer.drawRect(centerX - 4, topY + 4, 8, size - 8, color);
+      renderer.drawRect(left + 4, midY - 4, size - 8, 8, color);
+      renderer.drawRect(centerX - 9, midY - 9, 18, 18, color);
+      break;
+    case BuiltInApp::Count:
+      break;
+  }
+}
+
 void AppSuiteActivity::loop() {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const int pageWidth = renderer.getScreenWidth();
@@ -208,24 +299,29 @@ void AppSuiteActivity::render(RenderLock&&) {
     const int local = i - pageStart;
     const int row = local / gridCols();
     const int col = local % gridCols();
-    const int x = gridRect.x + col * cellW + 4;
+    const int x = gridRect.x + col * cellW + 5;
     const int y = gridRect.y + row * cellH + 4;
-    const int w = cellW - 8;
+    const int w = cellW - 10;
     const int h = cellH - 8;
     const bool selected = i == selectedIndex;
     renderer.fillRect(x, y, w, h, selected);
     renderer.drawRect(x, y, w, h, 2, !selected);
 
+    const BuiltInApp app = itemAt(i);
+    const int iconSize = std::min(34, std::max(26, h / 3));
+    const int iconY = y + 8;
+    drawAppIcon(app, x + w / 2, iconY, iconSize, selected);
+
     const char* title = I18N.get(labelFor(itemAt(i)));
     const char* value = I18N.get(valueFor(itemAt(i)));
     const int titleWidth = renderer.getTextWidth(UI_10_FONT_ID, title);
     const int titleX = x + (w - titleWidth) / 2;
-    const int titleY = y + h / 2 - renderer.getLineHeight(UI_10_FONT_ID);
+    const int titleY = iconY + iconSize + 6;
     renderer.drawText(UI_10_FONT_ID, titleX, titleY, title, !selected, EpdFontFamily::BOLD);
 
     const int valueWidth = renderer.getTextWidth(SMALL_FONT_ID, value);
     const int valueX = x + (w - valueWidth) / 2;
-    const int valueY = titleY + renderer.getLineHeight(UI_10_FONT_ID) + 8;
+    const int valueY = titleY + renderer.getLineHeight(UI_10_FONT_ID) + 4;
     renderer.drawText(SMALL_FONT_ID, valueX, valueY, value, !selected);
   }
 
