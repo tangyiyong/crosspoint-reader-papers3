@@ -40,7 +40,17 @@ void drawHeaderClock(const GfxRenderer& renderer, const Rect rect, const int y) 
 
 void drawHeaderWifiStatus(const GfxRenderer& renderer, const int x, const int y) {
   const bool connected = isWifiConnected();
-  renderer.drawText(SMALL_FONT_ID, x, y, connected ? "WiFi" : "WiFi--");
+  const int cx = x + 9;
+  const int baseY = y + 14;
+
+  renderer.drawPixel(cx, baseY);
+  renderer.drawLine(cx - 3, baseY - 4, cx + 3, baseY - 4);
+  renderer.drawLine(cx - 6, baseY - 8, cx + 6, baseY - 8);
+  renderer.drawLine(cx - 9, baseY - 12, cx + 9, baseY - 12);
+
+  if (!connected) {
+    renderer.drawLine(cx - 9, baseY - 1, cx + 9, baseY - 14, 2, true);
+  }
 }
 
 // Helper: draw battery icon at given position
@@ -334,7 +344,7 @@ void BaseTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
                    Rect{batteryX, rect.y + 5, BaseMetrics::values.batteryWidth, BaseMetrics::values.batteryHeight},
                    showBatteryPercentage);
   drawHeaderClock(renderer, rect, rect.y + 5);
-  drawHeaderWifiStatus(renderer, batteryX - (showBatteryPercentage ? 66 : 46), rect.y + 5);
+  drawHeaderWifiStatus(renderer, batteryX - (showBatteryPercentage ? 48 : 28), rect.y + 5);
 
   if (title) {
     int padding = rect.width - batteryX + BaseMetrics::values.batteryWidth;
