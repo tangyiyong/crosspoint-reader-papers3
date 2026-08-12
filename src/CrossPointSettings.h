@@ -224,6 +224,10 @@ class CrossPointSettings {
   char opdsServerUrl[128] = "";
   char opdsUsername[64] = "";
   char opdsPassword[64] = "";
+  // Calendar/almanac API. Supports {year} and {month} placeholders; otherwise year/month are appended as query args.
+  char calendarApiUrl[192] = "";
+  // Auto-connect to the last saved WiFi network during boot/wake.
+  uint8_t autoConnectWifiOnBoot = 0;
   // Hide battery percentage
   uint8_t hideBatteryPercentage = HIDE_ALWAYS;
   // Long-press chapter skip on side buttons

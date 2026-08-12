@@ -19,8 +19,11 @@ class ClockCalendarActivity final : public Activity {
   int todayDay = 0;
   int selectedDay = 0;
   bool showingDayDetail = false;
+  bool monthSyncAttempted = false;
+  bool monthSyncing = false;
 
   void changeMonth(int delta);
+  void syncDisplayedMonthIfNeeded();
   bool loadCurrentLocalDate();
   int hitTestDay(int touchX, int touchY) const;
   void drawMonthCalendar() const;

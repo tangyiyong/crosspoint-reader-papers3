@@ -26,6 +26,7 @@
 #include "StatusBarSettingsActivity.h"
 #include "UsbMassStorageActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
+#include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/ExternalFontLabel.h"
@@ -352,6 +353,21 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
     }
     return;  // Results will be handled in the result handler, so we can return early here
+  } else if (setting.type == SettingType::STRING && setting.stringOffset > 0 && setting.stringMaxLen > 0) {
+    const char* current = reinterpret_cast<const char*>(&SETTINGS) + setting.stringOffset;
+    startActivityForResult(
+        std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, I18N.get(setting.nameId), current,
+                                                setting.stringMaxLen - 1, setting.obfuscated),
+        [this, setting](const ActivityResult& result) {
+          if (!result.isCancelled && std::holds_alternative<KeyboardResult>(result.data)) {
+            const auto& text = std::get<KeyboardResult>(result.data).text;
+            char* dest = reinterpret_cast<char*>(&SETTINGS) + setting.stringOffset;
+            snprintf(dest, setting.stringMaxLen, "%s", text.c_str());
+            SETTINGS.saveToFile();
+          }
+          requestUpdate();
+        });
+    return;
   } else {
     return;
   }
@@ -428,6 +444,9 @@ void SettingsActivity::render(RenderLock&&) {
           } else {
             valueText = tr(STR_BUILTIN_FONT);
           }
+        } else if (setting.type == SettingType::STRING && setting.stringOffset > 0) {
+          const char* value = reinterpret_cast<const char*>(&SETTINGS) + setting.stringOffset;
+          valueText = value[0] != '\0' ? value : tr(STR_NOT_SET);
         }
         return valueText;
       },

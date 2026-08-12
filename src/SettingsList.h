@@ -89,6 +89,10 @@ inline const std::vector<SettingInfo>& getSettingsList() {
                         "sleepTimeout", StrId::STR_CAT_SYSTEM),
       SettingInfo::Toggle(StrId::STR_SHOW_HIDDEN_FILES, &CrossPointSettings::showHiddenFiles, "showHiddenFiles",
                           StrId::STR_CAT_SYSTEM),
+      SettingInfo::Toggle(StrId::STR_AUTO_CONNECT_WIFI, &CrossPointSettings::autoConnectWifiOnBoot,
+                          "autoConnectWifiOnBoot", StrId::STR_CAT_SYSTEM),
+      SettingInfo::String(StrId::STR_CALENDAR_API_URL, SETTINGS.calendarApiUrl, sizeof(SETTINGS.calendarApiUrl),
+                          "calendarApiUrl", StrId::STR_CAT_SYSTEM),
 
       // --- KOReader Sync (web-only, uses KOReaderCredentialStore) ---
       SettingInfo::DynamicString(

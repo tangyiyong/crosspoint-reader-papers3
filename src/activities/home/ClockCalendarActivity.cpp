@@ -9,6 +9,7 @@
 
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
+#include "calendar/CalendarDataClient.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -96,6 +97,11 @@ void ClockCalendarActivity::onEnter() {
 }
 
 void ClockCalendarActivity::loop() {
+  if (!monthSyncAttempted && !monthSyncing && displayYear > 0 && displayMonth > 0) {
+    syncDisplayedMonthIfNeeded();
+    return;
+  }
+
   if (showingDayDetail &&
       (mappedInput.wasPressed(MappedInputManager::Button::Back) || mappedInput.wasContentTapped())) {
     showingDayDetail = false;
@@ -170,6 +176,20 @@ void ClockCalendarActivity::changeMonth(const int delta) {
     displayYear += 1;
   }
   selectedDay = std::min(selectedDay > 0 ? selectedDay : 1, daysInMonth(displayYear, displayMonth));
+  monthSyncAttempted = false;
+}
+
+void ClockCalendarActivity::syncDisplayedMonthIfNeeded() {
+  monthSyncAttempted = true;
+  if (!CalendarDataClient::hasConfiguredApi()) {
+    return;
+  }
+
+  monthSyncing = true;
+  requestUpdateAndWait();
+  CalendarDataClient::syncMonth(displayYear, displayMonth);
+  monthSyncing = false;
+  requestUpdate();
 }
 
 int ClockCalendarActivity::hitTestDay(const int touchX, const int touchY) const {
@@ -215,10 +235,10 @@ void ClockCalendarActivity::drawMonthCalendar() const {
   }
   renderer.drawCenteredText(UI_12_FONT_ID, titleY, monthBuf, true, EpdFontFamily::BOLD);
   renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, titleY + 32,
-                    hasTime ? timeBuf : tr(STR_CLOCK_UNAVAILABLE));
-  const int dateWidth = renderer.getTextWidth(UI_10_FONT_ID, hasDate ? dateBuf : tr(STR_DATE_UNAVAILABLE));
-  renderer.drawText(UI_10_FONT_ID, pageWidth - metrics.contentSidePadding - dateWidth, titleY + 32,
-                    hasDate ? dateBuf : tr(STR_DATE_UNAVAILABLE));
+                    monthSyncing ? tr(STR_CALENDAR_SYNCING) : (hasTime ? timeBuf : tr(STR_CLOCK_UNAVAILABLE)));
+  const char* rightText = hasDate ? dateBuf : tr(STR_DATE_UNAVAILABLE);
+  const int dateWidth = renderer.getTextWidth(UI_10_FONT_ID, rightText);
+  renderer.drawText(UI_10_FONT_ID, pageWidth - metrics.contentSidePadding - dateWidth, titleY + 32, rightText);
 
   const Rect grid = calendarGridRect(renderer);
   const int headerHeight = 30;
@@ -298,7 +318,25 @@ void ClockCalendarActivity::drawDayDetail() const {
   char weekdayLine[40];
   snprintf(weekdayLine, sizeof(weekdayLine), "%s: %s", tr(STR_WEEKDAY), weekdayLabel(weekday));
   renderer.drawText(UI_10_FONT_ID, popupX + 28, popupY + 68, weekdayLine);
-  renderer.drawText(UI_10_FONT_ID, popupX + 28, popupY + 100, tr(STR_LUNAR_PENDING));
-  renderer.drawText(UI_10_FONT_ID, popupX + 28, popupY + 132, tr(STR_SOLAR_TERM_PENDING));
-  renderer.drawText(UI_10_FONT_ID, popupX + 28, popupY + 164, tr(STR_TAP_TO_CLOSE));
+
+  CalendarDayInfo info;
+  const bool hasInfo = CalendarDataClient::loadDayInfo(displayYear, displayMonth, selectedDay, info);
+  if (!hasInfo) {
+    renderer.drawText(UI_10_FONT_ID, popupX + 28, popupY + 100, tr(STR_CALENDAR_CACHE_MISSING));
+    renderer.drawText(UI_10_FONT_ID, popupX + 28, popupY + 132, tr(STR_LUNAR_PENDING));
+    renderer.drawText(UI_10_FONT_ID, popupX + 28, popupY + 164, tr(STR_TAP_TO_CLOSE));
+    return;
+  }
+
+  char line[112];
+  snprintf(line, sizeof(line), "%s: %s", tr(STR_LUNAR), info.lunar[0] ? info.lunar : "-");
+  renderer.drawText(UI_10_FONT_ID, popupX + 28, popupY + 100, line);
+  const char* label = info.solarTerm[0] ? tr(STR_SOLAR_TERM) : tr(STR_FESTIVAL);
+  const char* text = info.solarTerm[0] ? info.solarTerm : (info.festival[0] ? info.festival : "-");
+  snprintf(line, sizeof(line), "%s: %s", label, text);
+  renderer.drawText(UI_10_FONT_ID, popupX + 28, popupY + 124, line);
+  snprintf(line, sizeof(line), "%s: %s", tr(STR_ALMANAC_GOOD), info.almanacGood[0] ? info.almanacGood : "-");
+  renderer.drawText(UI_10_FONT_ID, popupX + 28, popupY + 148, line);
+  snprintf(line, sizeof(line), "%s: %s", tr(STR_ALMANAC_BAD), info.almanacBad[0] ? info.almanacBad : "-");
+  renderer.drawText(UI_10_FONT_ID, popupX + 28, popupY + 172, line);
 }

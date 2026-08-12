@@ -64,6 +64,7 @@ Feasible as a staged migration. The current project should not import the refere
 - [x] Add file-browser edge navigation semantics for Back/Enter and top/bottom edge actions.
 - [x] Add reader quick-bar Jump entry and percent slider access.
 - [x] Replace the clock/date placeholder with a tappable monthly calendar view.
+- [x] Add calendar API settings, monthly cache sync, and optional boot/wake WiFi auto-connect.
 
 ## Implementation Log
 
@@ -91,3 +92,10 @@ Feasible as a staged migration. The current project should not import the refere
 - 2026-08-12: Expanded `ClockCalendarActivity` into a month calendar with Monday-first weekday headers, today highlight,
   month navigation by swipe/buttons, and tap-to-open day detail. Lunar calendar, solar terms, festivals, and almanac
   metadata are left as explicit placeholders because they need a verified algorithm/data source and careful Flash sizing.
+- 2026-08-12: Added `calendarApiUrl` and `autoConnectWifiOnBoot` settings. The shared settings API exposes both keys for
+  a companion mobile app, while the device settings screen can edit the URL through the existing keyboard activity.
+- 2026-08-12: Added `CalendarDataClient` to fetch monthly JSON, cache it under `/.crosspoint/calendar/YYYY-MM.json`, and
+  display cached lunar/festival/solar-term/almanac fields in the date detail popup. Supported JSON forms are
+  `days: [{date,lunar,festival,solarTerm,good,bad}]`, `data: [...]`, or date-keyed `days`/`data` objects.
+- 2026-08-12: Added optional boot/wake WiFi auto-connect using the saved last-connected SSID. On success it syncs NTP and
+  attempts to refresh the current month calendar cache; on failure it times out and continues normal boot.

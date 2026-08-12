@@ -13,9 +13,11 @@
 #include <I18n.h>
 #include <Logging.h>
 #include <SPI.h>
+#include <WiFi.h>
 #include <builtinFonts/all.h>
 
 #include <cstring>
+#include <ctime>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -25,10 +27,12 @@
 #include "RecentBooksStore.h"
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
+#include "calendar/CalendarDataClient.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/ButtonNavigator.h"
 #include "util/ScreenshotUtil.h"
+#include "WifiCredentialStore.h"
 
 HalDisplay display;
 HalGPIO gpio;
@@ -37,6 +41,70 @@ GfxRenderer renderer(display);
 ActivityManager activityManager(renderer, mappedInputManager);
 FontDecompressor fontDecompressor;
 FontCacheManager fontCacheManager(renderer.getFontMap());
+
+namespace {
+void syncCurrentCalendarMonthFromSystemTime() {
+  const time_t now = time(nullptr);
+  if (now <= 1700000000) {
+    return;
+  }
+
+  const int offsetQuarterHours = static_cast<int>(SETTINGS.clockUtcOffsetQ) - 48;
+  const time_t localNow = now + offsetQuarterHours * 15 * 60;
+  struct tm timeinfo;
+  gmtime_r(&localNow, &timeinfo);
+  CalendarDataClient::syncMonth(timeinfo.tm_year + 1900, timeinfo.tm_mon + 1);
+}
+
+void autoConnectWifiOnBootIfEnabled() {
+  if (!SETTINGS.autoConnectWifiOnBoot) {
+    return;
+  }
+
+  const std::string ssid = WIFI_STORE.getLastConnectedSsid();
+  if (ssid.empty()) {
+    LOG_INF("WIFI", "Auto-connect enabled but no last SSID is saved");
+    return;
+  }
+
+  const auto cred = WIFI_STORE.findCredential(ssid);
+  if (!cred) {
+    LOG_INF("WIFI", "Auto-connect skipped; credential missing for last SSID");
+    return;
+  }
+
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect(true, true);
+  delay(100);
+  if (cred->password.empty()) {
+    WiFi.begin(cred->ssid.c_str());
+  } else {
+    WiFi.begin(cred->ssid.c_str(), cred->password.c_str());
+  }
+
+  constexpr unsigned long timeoutMs = 8000;
+  const unsigned long startedAt = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startedAt < timeoutMs) {
+    delay(100);
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    LOG_ERR("WIFI", "Auto-connect timed out");
+    WiFi.disconnect();
+    return;
+  }
+
+  LOG_INF("WIFI", "Auto-connected to saved WiFi");
+  if (halClock.isAvailable() && halClock.syncFromNTP()) {
+    if (!SETTINGS.clockHasBeenSynced) {
+      SETTINGS.clockHasBeenSynced = 1;
+      SETTINGS.saveToFile();
+    }
+  }
+  syncCurrentCalendarMonthFromSystemTime();
+}
+}  // namespace
 
 // Fonts
 EpdFont bookerly14RegularFont(&bookerly_14_regular);
@@ -245,6 +313,7 @@ void setup() {
   HalSystem::checkPanic();
 
   SETTINGS.loadFromFile();
+  WIFI_STORE.loadFromFile();
   FontMgr.scanFonts();
   FontMgr.loadSettings();
   I18N.loadSettings();
@@ -276,6 +345,8 @@ void setup() {
     default:
       break;
   }
+
+  autoConnectWifiOnBootIfEnabled();
 
   // First serial output only here to avoid timing inconsistencies for power button press duration verification
   LOG_DBG("MAIN", "Starting CrossPoint version " CROSSPOINT_VERSION);
