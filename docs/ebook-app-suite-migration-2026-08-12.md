@@ -63,6 +63,7 @@ Feasible as a staged migration. The current project should not import the refere
 - [x] Refine app suite to a compact 3x5 icon grid.
 - [x] Add file-browser edge navigation semantics for Back/Enter and top/bottom edge actions.
 - [x] Add reader quick-bar Jump entry and percent slider access.
+- [x] Replace the clock/date placeholder with a tappable monthly calendar view.
 
 ## Implementation Log
 
@@ -87,3 +88,6 @@ Feasible as a staged migration. The current project should not import the refere
 - 2026-08-12: Tightened `AppSuiteActivity` further to a 3x5 icon grid, reduced icon size, and added UTF-8-safe title/status truncation for narrow tiles.
 - 2026-08-12: `git diff --check` passed.
 - 2026-08-12: `pio run` completed successfully after the compact icon grid update.
+- 2026-08-12: Expanded `ClockCalendarActivity` into a month calendar with Monday-first weekday headers, today highlight,
+  month navigation by swipe/buttons, and tap-to-open day detail. Lunar calendar, solar terms, festivals, and almanac
+  metadata are left as explicit placeholders because they need a verified algorithm/data source and careful Flash sizing.
