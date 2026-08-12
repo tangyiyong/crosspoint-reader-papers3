@@ -14,6 +14,7 @@
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "quote/QuoteDataClient.h"
 
 void WifiSelectionActivity::onEnter() {
   Activity::onEnter();
@@ -732,6 +733,9 @@ void WifiSelectionActivity::renderForgetPrompt() const {
 }
 
 void WifiSelectionActivity::onComplete(const bool connected) {
+  if (connected) {
+    QuoteDataClient::syncDailyIfNeeded(false);
+  }
   ActivityResult result;
   result.isCancelled = !connected;
   if (connected) {

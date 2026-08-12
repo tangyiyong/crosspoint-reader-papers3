@@ -19,6 +19,11 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 
+namespace {
+constexpr int HOME_QUOTE_HEIGHT = 92;
+constexpr int HOME_QUOTE_TOP_MARGIN = 8;
+}  // namespace
+
 int HomeActivity::getMenuItemCount() const {
   int count = 5;  // App Suite, File Browser, Recents, File transfer, Settings
   if (!recentBooks.empty()) {
@@ -121,6 +126,7 @@ void HomeActivity::onEnter() {
 
   const auto& metrics = UITheme::getInstance().getMetrics();
   loadRecentBooks(metrics.homeRecentBooksCount);
+  loadDailyQuote();
 
   // Trigger first update
   requestUpdate();
@@ -194,9 +200,10 @@ void HomeActivity::loop() {
       }
     }
 
+    const Rect quoteRect = dailyQuoteRect(pageWidth, pageHeight);
     const Rect menuRect{0, metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing, pageWidth,
-                        pageHeight - (metrics.headerHeight + metrics.homeTopPadding + metrics.verticalSpacing * 2 +
-                                      metrics.buttonHintsHeight)};
+                        quoteRect.y - (metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing) -
+                            HOME_QUOTE_TOP_MARGIN};
     const int tappedMenuIndex = UITheme::getInstance().hitTestButtonMenu(
         menuRect, menuCount - static_cast<int>(recentBooks.size()), mappedInput.getTouchX(), mappedInput.getTouchY());
     if (tappedMenuIndex >= 0) {
@@ -218,6 +225,42 @@ void HomeActivity::loop() {
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     activateSelectedItem();
+  }
+}
+
+void HomeActivity::loadDailyQuote() {
+  QuoteDataClient::loadCached(dailyQuote);
+  if (QuoteDataClient::syncDailyIfNeeded(false)) {
+    QuoteDataClient::loadCached(dailyQuote);
+  }
+}
+
+Rect HomeActivity::dailyQuoteRect(const int pageWidth, const int pageHeight) const {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int bottom = pageHeight - metrics.buttonHintsHeight - metrics.verticalSpacing;
+  return Rect{metrics.contentSidePadding, bottom - HOME_QUOTE_HEIGHT, pageWidth - metrics.contentSidePadding * 2,
+              HOME_QUOTE_HEIGHT};
+}
+
+void HomeActivity::drawDailyQuote(const Rect rect) const {
+  const char* text = dailyQuote.hasAny ? dailyQuote.text : tr(STR_QUOTE_EMPTY);
+  renderer.drawRect(rect.x, rect.y, rect.width, rect.height, true);
+  const int titleY = rect.y + 8;
+  renderer.drawText(SMALL_FONT_ID, rect.x + 10, titleY, tr(STR_APP_DAILY_QUOTE), true, EpdFontFamily::BOLD);
+
+  if (dailyQuote.type[0] != '\0') {
+    const std::string type = renderer.truncatedText(SMALL_FONT_ID, dailyQuote.type, rect.width / 3);
+    const int typeWidth = renderer.getTextWidth(SMALL_FONT_ID, type.c_str());
+    renderer.drawText(SMALL_FONT_ID, rect.x + rect.width - 10 - typeWidth, titleY, type.c_str());
+  }
+
+  const int textTop = titleY + renderer.getLineHeight(SMALL_FONT_ID) + 8;
+  const int maxWidth = rect.width - 20;
+  const auto lines = renderer.wrappedText(UI_10_FONT_ID, text, maxWidth, 3);
+  int y = textTop;
+  for (const auto& line : lines) {
+    renderer.drawText(UI_10_FONT_ID, rect.x + 10, y, line.c_str());
+    y += renderer.getLineHeight(UI_10_FONT_ID) + 2;
   }
 }
 
@@ -246,14 +289,16 @@ void HomeActivity::render(RenderLock&&) {
     menuIcons.insert(menuIcons.begin() + 2, Library);
   }
 
+  const Rect quoteRect = dailyQuoteRect(pageWidth, pageHeight);
+  const Rect menuRect{0, metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing, pageWidth,
+                      quoteRect.y - (metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing) -
+                          HOME_QUOTE_TOP_MARGIN};
   GUI.drawButtonMenu(
-      renderer,
-      Rect{0, metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing, pageWidth,
-           pageHeight - (metrics.headerHeight + metrics.homeTopPadding + metrics.verticalSpacing * 2 +
-                         metrics.buttonHintsHeight)},
-      static_cast<int>(menuItems.size()), selectorIndex - recentBooks.size(),
+      renderer, menuRect, static_cast<int>(menuItems.size()), selectorIndex - recentBooks.size(),
       [&menuItems](int index) { return std::string(menuItems[index]); },
       [&menuIcons](int index) { return menuIcons[index]; });
+
+  drawDailyQuote(quoteRect);
 
   const auto labels = mappedInput.mapLabels("", tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

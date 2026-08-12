@@ -71,6 +71,7 @@ Feasible as a staged migration. The current project should not import the refere
 - [x] Redraw header WiFi status as a larger high-contrast icon and keep battery percentage hidden by default.
 - [x] Tighten PaperS3 Lyra top/bottom spacing, add calendar selected-day highlight, WiFi rescan, and reader progress
       long-press jump.
+- [x] Add cached SHWGIJ daily quote display on Home and a refreshable Daily Quote app.
 
 ## Implementation Log
 
@@ -125,3 +126,7 @@ Feasible as a staged migration. The current project should not import the refere
   selected-day border in `ClockCalendarActivity`, made saved WiFi entries connect directly while reserving Right for
   rescan and Left for forget, and added a bottom-right reader status long-press hit area that opens the percent jump UI
   for EPUB/TXT.
+- 2026-08-12: Added `QuoteDataClient` for `https://api.shwgij.com/api/randtext/get`, using the existing SHWGIJ token,
+  1500 ms request throttling, date-stamped SD cache at `/.crosspoint/quote/daily.json`, cache-first daily refresh on
+  boot/wake and WiFi connect, Home-screen quote rendering above the footer buttons, and a Daily Quote app with manual
+  refresh.
