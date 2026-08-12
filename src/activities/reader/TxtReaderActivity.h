@@ -39,6 +39,8 @@ class TxtReaderActivity final : public Activity {
   void renderStatusBar() const;
   void openReaderMenu();
   void openReaderQuickSettings();
+  void openPercentJump();
+  void jumpToPercent(int percent);
   void onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action);
 
   void initializeReader();

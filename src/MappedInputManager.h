@@ -48,8 +48,10 @@ class MappedInputManager {
   bool wasReaderSwipeDownFromTopEdge() const { return gpio.wasReaderSwipeDownFromTopEdgeReleased(); }
   bool wasReaderSwipeUpFromBottomEdge() const { return gpio.wasReaderSwipeUpFromBottomEdgeReleased(); }
   bool wasReaderTapTop() const { return gpio.wasReaderTapTopReleased(); }
+  bool wasEdgeTopPullDownGesture() const { return gpio.wasReaderSwipeDownFromTopEdgeReleased(); }
+  bool wasEdgeBottomPullUpGesture() const { return gpio.wasReaderSwipeUpFromBottomEdgeReleased(); }
   bool wasEdgeBackGesture() const {
-    return gpio.wasReaderSwipeRightFromLeftEdgeReleased() || gpio.wasReaderSwipeDownFromTopEdgeReleased();
+    return gpio.wasReaderSwipeRightFromLeftEdgeReleased();
   }
   bool wasEdgeNextGesture() const { return gpio.wasReaderSwipeLeftFromRightEdgeReleased(); }
   bool wasPressed(Button button) const;

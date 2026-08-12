@@ -173,6 +173,11 @@ void EpubReaderActivity::loop() {
       onGoHome();
       return;
     }
+    if (action == ReaderUtils::QuickBarAction::Jump) {
+      LOG_DBG("ERS", "reader quick bar jump");
+      openPercentJump();
+      return;
+    }
     if (action == ReaderUtils::QuickBarAction::Settings) {
       LOG_DBG("ERS", "reader quick bar settings");
       openReaderQuickSettings();
@@ -382,6 +387,23 @@ void EpubReaderActivity::openReaderMenu() {
                            });
 }
 
+void EpubReaderActivity::openPercentJump() {
+  float bookProgress = 0.0f;
+  if (epub && epub->getBookSize() > 0 && section && section->pageCount > 0) {
+    const float chapterProgress = static_cast<float>(section->currentPage) / static_cast<float>(section->pageCount);
+    bookProgress = epub->calculateProgress(currentSpineIndex, chapterProgress) * 100.0f;
+  }
+  const int initialPercent = clampPercent(static_cast<int>(bookProgress + 0.5f));
+  startActivityForResult(std::make_unique<EpubReaderPercentSelectionActivity>(renderer, mappedInput, initialPercent),
+                         [this](const ActivityResult& result) {
+                           if (!result.isCancelled) {
+                             jumpToPercent(std::get<PercentResult>(result.data).percent);
+                           } else {
+                             requestUpdate();
+                           }
+                         });
+}
+
 void EpubReaderActivity::openReaderQuickSettings() {
   startActivityForResult(std::make_unique<ReaderQuickSettingsActivity>(renderer, mappedInput),
                          [this](const ActivityResult& result) {
@@ -426,19 +448,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       break;
     }
     case EpubReaderMenuActivity::MenuAction::GO_TO_PERCENT: {
-      float bookProgress = 0.0f;
-      if (epub && epub->getBookSize() > 0 && section && section->pageCount > 0) {
-        const float chapterProgress = static_cast<float>(section->currentPage) / static_cast<float>(section->pageCount);
-        bookProgress = epub->calculateProgress(currentSpineIndex, chapterProgress) * 100.0f;
-      }
-      const int initialPercent = clampPercent(static_cast<int>(bookProgress + 0.5f));
-      startActivityForResult(
-          std::make_unique<EpubReaderPercentSelectionActivity>(renderer, mappedInput, initialPercent),
-          [this](const ActivityResult& result) {
-            if (!result.isCancelled) {
-              jumpToPercent(std::get<PercentResult>(result.data).percent);
-            }
-          });
+      openPercentJump();
       break;
     }
     case EpubReaderMenuActivity::MenuAction::DISPLAY_QR: {

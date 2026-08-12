@@ -11,6 +11,10 @@ namespace {
 // Fine/coarse slider step sizes for percent adjustments.
 constexpr int kSmallStep = 1;
 constexpr int kLargeStep = 10;
+constexpr int kSliderWidth = 360;
+constexpr int kSliderHeight = 16;
+constexpr int kSliderY = 140;
+constexpr int kSliderTouchPadding = 24;
 }  // namespace
 
 void EpubReaderPercentSelectionActivity::onEnter() {
@@ -32,8 +36,30 @@ void EpubReaderPercentSelectionActivity::adjustPercent(const int delta) {
   requestUpdate();
 }
 
+void EpubReaderPercentSelectionActivity::setPercentFromTouch(const int touchX, const int touchY) {
+  const int screenWidth = renderer.getScreenWidth();
+  const int barX = (screenWidth - kSliderWidth) / 2;
+  if (touchX < barX || touchX > barX + kSliderWidth || touchY < kSliderY - kSliderTouchPadding ||
+      touchY > kSliderY + kSliderHeight + kSliderTouchPadding) {
+    return;
+  }
+
+  percent = (touchX - barX) * 100 / kSliderWidth;
+  if (percent < 0) {
+    percent = 0;
+  } else if (percent > 100) {
+    percent = 100;
+  }
+  requestUpdate();
+}
+
 void EpubReaderPercentSelectionActivity::loop() {
   // Back cancels, confirm selects, arrows adjust the percent.
+  if (mappedInput.wasContentTapped()) {
+    setPercentFromTouch(mappedInput.getTouchX(), mappedInput.getTouchY());
+    return;
+  }
+
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     ActivityResult result;
     result.isCancelled = true;
@@ -66,25 +92,22 @@ void EpubReaderPercentSelectionActivity::render(RenderLock&&) {
 
   // Draw slider track.
   const int screenWidth = renderer.getScreenWidth();
-  constexpr int barWidth = 360;
-  constexpr int barHeight = 16;
-  const int barX = (screenWidth - barWidth) / 2;
-  const int barY = 140;
+  const int barX = (screenWidth - kSliderWidth) / 2;
 
-  renderer.drawRect(barX, barY, barWidth, barHeight);
+  renderer.drawRect(barX, kSliderY, kSliderWidth, kSliderHeight);
 
   // Fill slider based on percent.
-  const int fillWidth = (barWidth - 4) * percent / 100;
+  const int fillWidth = (kSliderWidth - 4) * percent / 100;
   if (fillWidth > 0) {
-    renderer.fillRect(barX + 2, barY + 2, fillWidth, barHeight - 4);
+    renderer.fillRect(barX + 2, kSliderY + 2, fillWidth, kSliderHeight - 4);
   }
 
   // Draw a simple knob centered at the current percent.
   const int knobX = barX + 2 + fillWidth - 2;
-  renderer.fillRect(knobX, barY - 4, 4, barHeight + 8, true);
+  renderer.fillRect(knobX, kSliderY - 4, 4, kSliderHeight + 8, true);
 
   // Hint text for step sizes.
-  renderer.drawCenteredText(SMALL_FONT_ID, barY + 30, tr(STR_PERCENT_STEP_HINT), true);
+  renderer.drawCenteredText(SMALL_FONT_ID, kSliderY + 30, tr(STR_PERCENT_STEP_HINT), true);
 
   // Button hints follow the current front button layout.
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), "-", "+");

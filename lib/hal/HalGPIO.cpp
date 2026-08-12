@@ -220,7 +220,6 @@ void HalGPIO::update() {
         } else if (startLogicalY >= contentBottom - edgeHeight && deltaY <= -SWIPE_THRESHOLD &&
                    abs(deltaX) <= verticalDriftLimit) {
           readerSwipeUpFromBottomEdgeReleased = true;
-          contentSwipeUpReleased = true;
           LOG_DBG("TOUCH", "content bottom-edge swipe up dx=%d dy=%d", deltaX, deltaY);
         } else if (deltaY < -SWIPE_THRESHOLD) {
           contentSwipeUpReleased = true;

@@ -38,7 +38,7 @@ struct PageTurnResult {
   bool next;
 };
 
-enum class QuickBarAction : uint8_t { None, Back, Home, Settings };
+  enum class QuickBarAction : uint8_t { None, Back, Home, Jump, Settings };
 
 inline PageTurnResult detectPageTurn(const MappedInputManager& input) {
   const bool usePress = !SETTINGS.longPressChapterSkip;
@@ -68,7 +68,7 @@ inline bool wasBackOverlayTap(const MappedInputManager& input) { return input.wa
 inline bool wasMenuGesture(const MappedInputManager& input) { return input.wasReaderSwipeUpFromBottomEdge(); }
 
 inline int quickBarButtonWidth(const GfxRenderer& renderer) {
-  return renderer.getScreenWidth() / 3;
+  return renderer.getScreenWidth() / 4;
 }
 
 inline int quickBarHeight() { return 54; }
@@ -89,9 +89,10 @@ inline QuickBarAction hitTestReaderQuickBar(const GfxRenderer& renderer, const b
   if (touchY < buttonY || touchY >= buttonY + quickBarHeight() || touchX < 0 || touchX >= screenWidth) {
     return QuickBarAction::None;
   }
-  const int index = (touchX * 3) / screenWidth;
+  const int index = (touchX * 4) / screenWidth;
   if (index == 0) return QuickBarAction::Back;
   if (index == 1) return QuickBarAction::Home;
+  if (index == 2) return QuickBarAction::Jump;
   return QuickBarAction::Settings;
 }
 
@@ -103,11 +104,11 @@ inline void drawReaderBackOverlay(const GfxRenderer& renderer, const bool visibl
   constexpr int buttonY = 10;
   constexpr int cornerRadius = 5;
   const int screenWidth = renderer.getScreenWidth();
-  const char* labels[] = {tr(STR_BACK), tr(STR_HOME), tr(STR_SETTINGS_TITLE)};
+  const char* labels[] = {tr(STR_BACK), tr(STR_HOME), tr(STR_GO_TO_PERCENT), tr(STR_SETTINGS_TITLE)};
 
-  for (int i = 0; i < 3; ++i) {
-    const int buttonX = i * screenWidth / 3;
-    const int nextX = (i + 1) * screenWidth / 3;
+  for (int i = 0; i < 4; ++i) {
+    const int buttonX = i * screenWidth / 4;
+    const int nextX = (i + 1) * screenWidth / 4;
     const int buttonWidth = nextX - buttonX;
     renderer.fillRect(buttonX, buttonY, buttonWidth, quickBarHeight(), false);
     renderer.drawRoundedRect(buttonX, buttonY, buttonWidth, quickBarHeight(), 1, cornerRadius, true);

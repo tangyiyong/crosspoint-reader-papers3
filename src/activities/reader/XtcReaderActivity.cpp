@@ -93,6 +93,11 @@ void XtcReaderActivity::loop() {
       onGoHome();
       return;
     }
+    if (action == ReaderUtils::QuickBarAction::Jump) {
+      LOG_DBG("XTR", "reader quick bar jump");
+      openChapterSelection();
+      return;
+    }
     if (action == ReaderUtils::QuickBarAction::Settings) {
       LOG_DBG("XTR", "reader quick bar settings");
       openReaderQuickSettings();

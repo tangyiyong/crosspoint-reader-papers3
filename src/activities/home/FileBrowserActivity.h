@@ -18,6 +18,7 @@ class FileBrowserActivity final : public Activity {
   size_t selectorIndex = 0;
 
   bool lockLongPressBack = false;
+  bool quickBarVisible = false;
 
   // Files state
   std::string basepath = "/";
@@ -27,6 +28,8 @@ class FileBrowserActivity final : public Activity {
   void loadFiles();
   size_t findEntry(const std::string& name) const;
   void openSelectedEntry();
+  void goUpOneLevel();
+  void openSelectedDirectory();
 
  public:
   explicit FileBrowserActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string initialPath = "/")

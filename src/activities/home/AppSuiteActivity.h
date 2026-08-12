@@ -5,6 +5,8 @@
 #include "activities/Activity.h"
 #include "util/ButtonNavigator.h"
 
+struct Rect;
+
 class AppSuiteActivity final : public Activity {
   enum class BuiltInApp : uint8_t {
     Reader,
@@ -28,11 +30,15 @@ class AppSuiteActivity final : public Activity {
 
   static constexpr int itemCount() { return static_cast<int>(BuiltInApp::Count); }
   static BuiltInApp itemAt(int index) { return static_cast<BuiltInApp>(index); }
+  static constexpr int gridCols() { return 2; }
+  static constexpr int gridRows() { return 3; }
+  static constexpr int gridItemsPerPage() { return gridCols() * gridRows(); }
 
   StrId labelFor(BuiltInApp app) const;
   StrId valueFor(BuiltInApp app) const;
   void activateSelected();
   void openPlaceholder(StrId title, StrId message);
+  int hitTestGrid(Rect rect, int touchX, int touchY) const;
 
  public:
   explicit AppSuiteActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)

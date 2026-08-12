@@ -47,6 +47,7 @@ class EpubReaderActivity final : public Activity {
   void saveProgress(int spineIndex, int currentPage, int pageCount);
   // Jump to a percentage of the book (0-100), mapping it to spine and page.
   void jumpToPercent(int percent);
+  void openPercentJump();
   void openReaderMenu();
   void openReaderQuickSettings();
   void onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action);

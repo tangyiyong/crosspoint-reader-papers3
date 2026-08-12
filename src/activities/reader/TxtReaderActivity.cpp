@@ -12,6 +12,7 @@
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "EpubReaderPercentSelectionActivity.h"
 #include "MappedInputManager.h"
 #include "ReaderQuickSettingsActivity.h"
 #include "ReaderUtils.h"
@@ -152,6 +153,11 @@ void TxtReaderActivity::loop() {
       onGoHome();
       return;
     }
+    if (action == ReaderUtils::QuickBarAction::Jump) {
+      LOG_DBG("TRS", "reader quick bar jump");
+      openPercentJump();
+      return;
+    }
     if (action == ReaderUtils::QuickBarAction::Settings) {
       LOG_DBG("TRS", "reader quick bar settings");
       openReaderQuickSettings();
@@ -237,6 +243,38 @@ void TxtReaderActivity::openReaderMenu() {
       });
 }
 
+void TxtReaderActivity::openPercentJump() {
+  const int progressPercent =
+      totalPages > 0 ? clampPercent(static_cast<int>((currentPage + 1) * 100L / totalPages)) : 0;
+  startActivityForResult(std::make_unique<EpubReaderPercentSelectionActivity>(renderer, mappedInput, progressPercent),
+                         [this](const ActivityResult& result) {
+                           if (!result.isCancelled) {
+                             jumpToPercent(std::get<PercentResult>(result.data).percent);
+                           } else {
+                             requestUpdate();
+                           }
+                         });
+}
+
+void TxtReaderActivity::jumpToPercent(int percent) {
+  percent = clampPercent(percent);
+  if (!initialized) {
+    initializeReader();
+  }
+  if (totalPages <= 0) {
+    requestUpdate();
+    return;
+  }
+  int targetPage = static_cast<int>((static_cast<long long>(totalPages - 1) * percent + 50) / 100);
+  if (targetPage < 0) targetPage = 0;
+  if (targetPage >= totalPages) targetPage = totalPages - 1;
+  if (!ensurePageIndexed(targetPage)) {
+    targetPage = static_cast<int>(pageOffsets.empty() ? 0 : pageOffsets.size() - 1);
+  }
+  currentPage = targetPage;
+  requestUpdate();
+}
+
 void TxtReaderActivity::openReaderQuickSettings() {
   startActivityForResult(std::make_unique<ReaderQuickSettingsActivity>(renderer, mappedInput),
                          [this](const ActivityResult& result) {
@@ -258,6 +296,9 @@ void TxtReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction a
   switch (action) {
     case EpubReaderMenuActivity::MenuAction::GO_HOME:
       onGoHome();
+      return;
+    case EpubReaderMenuActivity::MenuAction::GO_TO_PERCENT:
+      openPercentJump();
       return;
     case EpubReaderMenuActivity::MenuAction::DELETE_CACHE: {
       if (txt) {

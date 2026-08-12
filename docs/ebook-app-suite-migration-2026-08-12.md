@@ -58,7 +58,10 @@ Feasible as a staged migration. The current project should not import the refere
 - [x] Add placeholder Activity for hardware/service-gated apps.
 - [x] Add i18n strings for English and Simplified Chinese.
 - [x] Build and verify.
-- [ ] Commit and push the app-suite branch.
+- [x] Commit and push the app-suite branch.
+- [x] Convert app suite from list rows to tappable app tiles.
+- [x] Add file-browser edge navigation semantics for Back/Enter and top/bottom edge actions.
+- [x] Add reader quick-bar Jump entry and percent slider access.
 
 ## Implementation Log
 
@@ -72,3 +75,10 @@ Feasible as a staged migration. The current project should not import the refere
 - 2026-08-12: Added placeholders for notepad, drawing, music, and weather, with music marked as hardware-gated.
 - 2026-08-12: `git diff --check` passed.
 - 2026-08-12: `pio run` completed successfully. Flash usage is now about 97.8%, so future full app ports need feature flags or partition/binary-size work.
+- 2026-08-12: Converted `AppSuiteActivity` to a 2x3 tile grid with direct tap activation and swipe paging.
+- 2026-08-12: Fixed file-browser left-edge swipe to go up one folder level, right-edge swipe to enter the selected folder, top-edge pull-down to show Back/Home/Settings, and bottom-edge pull-up to open Settings.
+- 2026-08-12: Changed generic edge Back semantics so top-edge pull-down reveals controls instead of acting as Back.
+- 2026-08-12: Added a Jump tile to the reader top quick bar. EPUB uses the existing percent slider, TXT maps the percent to lazily indexed pages, and XTC uses chapter selection.
+- 2026-08-12: Added tap-to-position handling on the percent slider so touch users can jump faster than repeated button steps.
+- 2026-08-12: `git diff --check` passed.
+- 2026-08-12: `pio run` completed successfully after the app tile and gesture refinements.

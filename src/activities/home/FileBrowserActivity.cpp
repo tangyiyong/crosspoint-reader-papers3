@@ -17,6 +17,8 @@
 
 namespace {
 constexpr unsigned long GO_HOME_MS = 1000;
+constexpr int QUICK_BAR_Y = 10;
+constexpr int QUICK_BAR_H = 54;
 }  // namespace
 
 void sortFileList(std::vector<std::string>& strs) {
@@ -160,6 +162,31 @@ void FileBrowserActivity::openSelectedEntry() {
   onSelectBook(basepath + entry);
 }
 
+void FileBrowserActivity::openSelectedDirectory() {
+  if (files.empty()) return;
+  const std::string& entry = files[selectorIndex];
+  if (entry.back() != '/') return;
+  openSelectedEntry();
+}
+
+void FileBrowserActivity::goUpOneLevel() {
+  if (basepath != "/") {
+    const std::string oldPath = basepath;
+
+    basepath.replace(basepath.find_last_of('/'), std::string::npos, "");
+    if (basepath.empty()) basepath = "/";
+    loadFiles();
+
+    const auto pos = oldPath.find_last_of('/');
+    const std::string dirName = oldPath.substr(pos + 1) + "/";
+    selectorIndex = findEntry(dirName);
+
+    requestUpdate();
+  } else {
+    onGoHome();
+  }
+}
+
 void FileBrowserActivity::loop() {
   // Long press BACK (1s+) goes to root folder
   // but Long press BACK (1s+) from ReaderActivity sends us here with the MappedInput already set.
@@ -188,6 +215,47 @@ void FileBrowserActivity::loop() {
   const int contentHeight =
       pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing - pathReserved;
   const int listSize = static_cast<int>(files.size());
+
+  if (quickBarVisible && mappedInput.wasContentTapped()) {
+    const int touchX = mappedInput.getTouchX();
+    const int touchY = mappedInput.getTouchY();
+    if (touchY >= QUICK_BAR_Y && touchY < QUICK_BAR_Y + QUICK_BAR_H && touchX >= 0 && touchX < pageWidth) {
+      quickBarVisible = false;
+      const int zone = (touchX * 3) / pageWidth;
+      if (zone == 0) {
+        goUpOneLevel();
+      } else if (zone == 1) {
+        onGoHome();
+      } else {
+        activityManager.goToSettings();
+      }
+      return;
+    }
+    quickBarVisible = false;
+    requestUpdate();
+    return;
+  }
+
+  if (mappedInput.wasEdgeTopPullDownGesture()) {
+    quickBarVisible = true;
+    requestUpdate();
+    return;
+  }
+
+  if (mappedInput.wasEdgeBottomPullUpGesture()) {
+    activityManager.goToSettings();
+    return;
+  }
+
+  if (mappedInput.wasEdgeBackGesture()) {
+    goUpOneLevel();
+    return;
+  }
+
+  if (mappedInput.wasEdgeNextGesture()) {
+    openSelectedDirectory();
+    return;
+  }
 
   if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
     if (pageItems > 0 && listSize > pageItems) {
@@ -260,17 +328,7 @@ void FileBrowserActivity::loop() {
     // Short press: go up one directory, or go home if at root
     if (mappedInput.getHeldTime() < GO_HOME_MS) {
       if (basepath != "/") {
-        const std::string oldPath = basepath;
-
-        basepath.replace(basepath.find_last_of('/'), std::string::npos, "");
-        if (basepath.empty()) basepath = "/";
-        loadFiles();
-
-        const auto pos = oldPath.find_last_of('/');
-        const std::string dirName = oldPath.substr(pos + 1) + "/";
-        selectorIndex = findEntry(dirName);
-
-        requestUpdate();
+        goUpOneLevel();
       } else {
         onGoHome();
       }
@@ -388,6 +446,21 @@ void FileBrowserActivity::render(RenderLock&&) {
       mappedInput.mapLabels(basepath == "/" ? tr(STR_HOME) : tr(STR_BACK), files.empty() ? "" : tr(STR_OPEN),
                             files.empty() ? "" : tr(STR_DIR_UP), files.empty() ? "" : tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+
+  if (quickBarVisible) {
+    const char* quickLabels[] = {tr(STR_BACK), tr(STR_HOME), tr(STR_SETTINGS_TITLE)};
+    for (int i = 0; i < 3; ++i) {
+      const int buttonX = i * pageWidth / 3;
+      const int nextX = (i + 1) * pageWidth / 3;
+      const int buttonWidth = nextX - buttonX;
+      renderer.fillRect(buttonX, QUICK_BAR_Y, buttonWidth, QUICK_BAR_H, false);
+      renderer.drawRect(buttonX, QUICK_BAR_Y, buttonWidth, QUICK_BAR_H, true);
+      const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, quickLabels[i]);
+      const int textX = buttonX + (buttonWidth - textWidth) / 2;
+      const int textY = QUICK_BAR_Y + (QUICK_BAR_H - renderer.getLineHeight(UI_10_FONT_ID)) / 2;
+      renderer.drawText(UI_10_FONT_ID, textX, textY, quickLabels[i]);
+    }
+  }
 
   renderer.displayBuffer();
 }
