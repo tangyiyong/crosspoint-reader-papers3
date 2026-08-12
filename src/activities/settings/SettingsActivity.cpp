@@ -93,6 +93,68 @@ void SettingsActivity::onExit() {
   UITheme::getInstance().reload();  // Re-apply theme in case it was changed
 }
 
+void SettingsActivity::enterCategory(const int categoryIndex) {
+  if (categoryIndex < 0 || categoryIndex >= categoryCount) {
+    return;
+  }
+
+  selectedCategoryIndex = categoryIndex;
+  selectedSettingIndex = 0;
+  switch (selectedCategoryIndex) {
+    case 0:
+      currentSettings = &displaySettings;
+      break;
+    case 1:
+      currentSettings = &readerSettings;
+      break;
+    case 2:
+      currentSettings = &controlsSettings;
+      break;
+    case 3:
+      currentSettings = &systemSettings;
+      break;
+  }
+  settingsCount = static_cast<int>(currentSettings->size());
+  requestUpdate();
+}
+
+int SettingsActivity::hitTestCategoryTab(const Rect tabRect, const int touchX, const int touchY) const {
+  if (touchX < tabRect.x || touchX >= tabRect.x + tabRect.width || touchY < tabRect.y ||
+      touchY >= tabRect.y + tabRect.height) {
+    return -1;
+  }
+
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  if (SETTINGS.uiTheme == CrossPointSettings::UI_THEME::CLASSIC) {
+    int currentX = tabRect.x + metrics.contentSidePadding;
+    for (int i = 0; i < categoryCount; ++i) {
+      const char* label = I18N.get(categoryNames[i]);
+      const auto style = i == selectedCategoryIndex ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR;
+      const int textWidth = renderer.getTextWidth(UI_12_FONT_ID, label, style);
+      const int hitLeft = currentX - 3;
+      const int hitRight = currentX + textWidth + metrics.tabSpacing / 2;
+      if (touchX >= hitLeft && touchX < hitRight) {
+        return i;
+      }
+      currentX += textWidth + metrics.tabSpacing;
+    }
+  } else {
+    constexpr int lyraSelectionPadding = 8;
+    int currentX = tabRect.x + metrics.contentSidePadding;
+    for (int i = 0; i < categoryCount; ++i) {
+      const char* label = I18N.get(categoryNames[i]);
+      const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, label, EpdFontFamily::REGULAR);
+      const int hitRight = currentX + textWidth + 2 * lyraSelectionPadding + metrics.tabSpacing / 2;
+      if (touchX >= currentX && touchX < hitRight) {
+        return i;
+      }
+      currentX += textWidth + metrics.tabSpacing + 2 * lyraSelectionPadding;
+    }
+  }
+
+  return -1;
+}
+
 void SettingsActivity::loop() {
   bool hasChangedCategory = false;
   const auto pageWidth = renderer.getScreenWidth();
@@ -121,15 +183,10 @@ void SettingsActivity::loop() {
     const Rect tabRect{0, metrics.topPadding + metrics.headerHeight, pageWidth, metrics.tabBarHeight};
     const int touchX = mappedInput.getTouchX();
     const int touchY = mappedInput.getTouchY();
-    if (touchY >= tabRect.y && touchY < tabRect.y + tabRect.height) {
-      const int tabWidth = pageWidth / categoryCount;
-      const int tappedCategory = tabWidth > 0 ? touchX / tabWidth : -1;
-      if (tappedCategory >= 0 && tappedCategory < categoryCount) {
-        selectedCategoryIndex = tappedCategory;
-        selectedSettingIndex = 0;
-        hasChangedCategory = true;
-        requestUpdate();
-      }
+    const int tappedCategory = hitTestCategoryTab(tabRect, touchX, touchY);
+    if (tappedCategory >= 0) {
+      enterCategory(tappedCategory);
+      return;
     } else {
       const int tappedSetting = UITheme::getInstance().hitTestListItem(listRect, settingsCount, selectedSettingIndex - 1,
                                                                        false, touchX, touchY);
@@ -191,21 +248,9 @@ void SettingsActivity::loop() {
 
   if (hasChangedCategory) {
     selectedSettingIndex = (selectedSettingIndex == 0) ? 0 : 1;
-    switch (selectedCategoryIndex) {
-      case 0:
-        currentSettings = &displaySettings;
-        break;
-      case 1:
-        currentSettings = &readerSettings;
-        break;
-      case 2:
-        currentSettings = &controlsSettings;
-        break;
-      case 3:
-        currentSettings = &systemSettings;
-        break;
-    }
-    settingsCount = static_cast<int>(currentSettings->size());
+    const int restoredSelection = selectedSettingIndex;
+    enterCategory(selectedCategoryIndex);
+    selectedSettingIndex = restoredSelection;
   }
 }
 

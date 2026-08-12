@@ -9,6 +9,8 @@
 #include "activities/Activity.h"
 #include "util/ButtonNavigator.h"
 
+struct Rect;
+
 enum class SettingType { TOGGLE, ENUM, ACTION, VALUE, STRING };
 
 enum class SettingAction {
@@ -160,6 +162,7 @@ class SettingsActivity final : public Activity {
   static const StrId categoryNames[categoryCount];
 
   void enterCategory(int categoryIndex);
+  int hitTestCategoryTab(Rect tabRect, int touchX, int touchY) const;
   void toggleCurrentSetting();
 
  public:
