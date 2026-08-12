@@ -9,6 +9,7 @@
 #include <Utf8.h>
 #include <Xtc.h>
 
+#include <algorithm>
 #include <cstring>
 #include <vector>
 
@@ -20,8 +21,11 @@
 #include "fontIds.h"
 
 namespace {
-constexpr int HOME_QUOTE_HEIGHT = 92;
-constexpr int HOME_QUOTE_TOP_MARGIN = 8;
+constexpr int HOME_TODAY_HISTORY_HEIGHT = 160;
+constexpr int HOME_TODAY_HISTORY_TOP_MARGIN = 6;
+constexpr int HOME_MENU_VERTICAL_PADDING = 5;
+constexpr int HOME_MENU_ROW_HEIGHT = 42;
+constexpr int HOME_MENU_SPACING = 4;
 }  // namespace
 
 int HomeActivity::getMenuItemCount() const {
@@ -126,7 +130,7 @@ void HomeActivity::onEnter() {
 
   const auto& metrics = UITheme::getInstance().getMetrics();
   loadRecentBooks(metrics.homeRecentBooksCount);
-  loadDailyQuote();
+  loadTodayHistoryCache();
 
   // Trigger first update
   requestUpdate();
@@ -187,6 +191,27 @@ void HomeActivity::loop() {
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
 
+  if (!firstRenderDone) {
+    return;
+  }
+
+  if (!todayHistorySyncAttempted) {
+    syncTodayHistoryIfNeeded();
+    return;
+  }
+
+  const Rect historyRect = todayHistoryRect(pageWidth, pageHeight);
+  if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
+    const int maxTop = std::max(0, static_cast<int>(todayHistory.events.size()) - todayHistoryVisibleItems(historyRect));
+    if (mappedInput.wasContentSwipedUp()) {
+      todayHistoryTopIndex = std::min(maxTop, todayHistoryTopIndex + todayHistoryVisibleItems(historyRect));
+    } else {
+      todayHistoryTopIndex = std::max(0, todayHistoryTopIndex - todayHistoryVisibleItems(historyRect));
+    }
+    requestUpdate();
+    return;
+  }
+
   if (mappedInput.wasContentTapped()) {
     const int touchX = mappedInput.getTouchX();
     const int touchY = mappedInput.getTouchY();
@@ -200,12 +225,10 @@ void HomeActivity::loop() {
       }
     }
 
-    const Rect quoteRect = dailyQuoteRect(pageWidth, pageHeight);
-    const Rect menuRect{0, metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing, pageWidth,
-                        quoteRect.y - (metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing) -
-                            HOME_QUOTE_TOP_MARGIN};
-    const int tappedMenuIndex = UITheme::getInstance().hitTestButtonMenu(
-        menuRect, menuCount - static_cast<int>(recentBooks.size()), mappedInput.getTouchX(), mappedInput.getTouchY());
+    const Rect menuRect = homeMenuRect(pageWidth, pageHeight);
+    const int tappedMenuIndex =
+        hitTestHomeMenu(menuRect, menuCount - static_cast<int>(recentBooks.size()), mappedInput.getTouchX(),
+                        mappedInput.getTouchY());
     if (tappedMenuIndex >= 0) {
       selectorIndex = static_cast<int>(recentBooks.size()) + tappedMenuIndex;
       activateSelectedItem();
@@ -228,39 +251,119 @@ void HomeActivity::loop() {
   }
 }
 
-void HomeActivity::loadDailyQuote() {
-  QuoteDataClient::loadCached(dailyQuote);
-  if (QuoteDataClient::syncDailyIfNeeded(false)) {
-    QuoteDataClient::loadCached(dailyQuote);
+int HomeActivity::hitTestHomeMenu(const Rect rect, const int itemCount, const int touchX, const int touchY) const {
+  if (touchX < rect.x || touchX >= rect.x + rect.width || touchY < rect.y || touchY >= rect.y + rect.height) {
+    return -1;
+  }
+  for (int i = 0; i < itemCount; ++i) {
+    const int y = rect.y + i * (HOME_MENU_ROW_HEIGHT + HOME_MENU_SPACING);
+    if (touchY >= y && touchY < y + HOME_MENU_ROW_HEIGHT) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+void HomeActivity::drawCompactHomeMenu(const Rect rect, const std::vector<const char*>& menuItems) {
+  const int selectedMenuIndex = selectorIndex - static_cast<int>(recentBooks.size());
+  const int rowW = rect.width - UITheme::getInstance().getMetrics().contentSidePadding * 2;
+  const int rowX = rect.x + UITheme::getInstance().getMetrics().contentSidePadding;
+  for (int i = 0; i < static_cast<int>(menuItems.size()); ++i) {
+    const int rowY = rect.y + i * (HOME_MENU_ROW_HEIGHT + HOME_MENU_SPACING);
+    if (rowY + HOME_MENU_ROW_HEIGHT > rect.y + rect.height) {
+      break;
+    }
+    const bool selected = selectedMenuIndex == i;
+    if (selected) {
+      renderer.fillRect(rowX, rowY, rowW, HOME_MENU_ROW_HEIGHT);
+    } else {
+      renderer.drawRect(rowX, rowY, rowW, HOME_MENU_ROW_HEIGHT);
+    }
+    const std::string label = renderer.truncatedText(UI_10_FONT_ID, menuItems[i], rowW - 24);
+    const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, label.c_str());
+    const int textY = rowY + (HOME_MENU_ROW_HEIGHT - renderer.getLineHeight(UI_10_FONT_ID)) / 2;
+    renderer.drawText(UI_10_FONT_ID, rowX + (rowW - textWidth) / 2, textY, label.c_str(), !selected);
   }
 }
 
-Rect HomeActivity::dailyQuoteRect(const int pageWidth, const int pageHeight) const {
+void HomeActivity::loadTodayHistoryCache() {
+  TodayHistoryClient::loadCached(todayHistory);
+  todayHistoryTopIndex = 0;
+  todayHistorySyncAttempted = false;
+}
+
+void HomeActivity::syncTodayHistoryIfNeeded() {
+  todayHistorySyncAttempted = true;
+  if (TodayHistoryClient::syncToday(true)) {
+    TodayHistoryClient::loadCached(todayHistory);
+    todayHistoryTopIndex = 0;
+    requestUpdate();
+  }
+}
+
+Rect HomeActivity::todayHistoryRect(const int pageWidth, const int pageHeight) const {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const int bottom = pageHeight - metrics.buttonHintsHeight - metrics.verticalSpacing;
-  return Rect{metrics.contentSidePadding, bottom - HOME_QUOTE_HEIGHT, pageWidth - metrics.contentSidePadding * 2,
-              HOME_QUOTE_HEIGHT};
+  return Rect{metrics.contentSidePadding, bottom - HOME_TODAY_HISTORY_HEIGHT, pageWidth - metrics.contentSidePadding * 2,
+              HOME_TODAY_HISTORY_HEIGHT};
 }
 
-void HomeActivity::drawDailyQuote(const Rect rect) const {
-  const char* text = dailyQuote.hasAny ? dailyQuote.text : tr(STR_QUOTE_EMPTY);
+Rect HomeActivity::homeMenuRect(const int pageWidth, const int pageHeight) const {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const Rect historyRect = todayHistoryRect(pageWidth, pageHeight);
+  const int menuTop = metrics.homeTopPadding + metrics.homeCoverTileHeight + HOME_MENU_VERTICAL_PADDING;
+  return Rect{0, menuTop, pageWidth, historyRect.y - menuTop - HOME_TODAY_HISTORY_TOP_MARGIN};
+}
+
+int HomeActivity::todayHistoryVisibleItems(const Rect rect) const {
+  const int itemH = renderer.getLineHeight(UI_10_FONT_ID) + renderer.getLineHeight(SMALL_FONT_ID) + 7;
+  return std::max(1, (rect.height - 34) / std::max(1, itemH));
+}
+
+void HomeActivity::drawTodayHistory(const Rect rect) const {
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height, true);
   const int titleY = rect.y + 8;
-  renderer.drawText(SMALL_FONT_ID, rect.x + 10, titleY, tr(STR_APP_DAILY_QUOTE), true, EpdFontFamily::BOLD);
+  renderer.drawText(SMALL_FONT_ID, rect.x + 10, titleY, tr(STR_TODAY_HISTORY), true, EpdFontFamily::BOLD);
 
-  if (dailyQuote.type[0] != '\0') {
-    const std::string type = renderer.truncatedText(SMALL_FONT_ID, dailyQuote.type, rect.width / 3);
-    const int typeWidth = renderer.getTextWidth(SMALL_FONT_ID, type.c_str());
-    renderer.drawText(SMALL_FONT_ID, rect.x + rect.width - 10 - typeWidth, titleY, type.c_str());
+  if (todayHistory.update[0] != '\0') {
+    const int updateWidth = renderer.getTextWidth(SMALL_FONT_ID, todayHistory.update);
+    renderer.drawText(SMALL_FONT_ID, rect.x + rect.width - 10 - updateWidth, titleY, todayHistory.update);
   }
 
-  const int textTop = titleY + renderer.getLineHeight(SMALL_FONT_ID) + 8;
+  if (!todayHistory.hasAny) {
+    renderer.drawText(UI_10_FONT_ID, rect.x + 10, titleY + renderer.getLineHeight(SMALL_FONT_ID) + 10,
+                      tr(STR_TODAY_HISTORY_EMPTY));
+    return;
+  }
+
+  const int listTop = titleY + renderer.getLineHeight(SMALL_FONT_ID) + 8;
   const int maxWidth = rect.width - 20;
-  const auto lines = renderer.wrappedText(UI_10_FONT_ID, text, maxWidth, 3);
-  int y = textTop;
-  for (const auto& line : lines) {
-    renderer.drawText(UI_10_FONT_ID, rect.x + 10, y, line.c_str());
+  const int itemH = renderer.getLineHeight(UI_10_FONT_ID) + renderer.getLineHeight(SMALL_FONT_ID) + 7;
+  const int visible = todayHistoryVisibleItems(rect);
+  const int end = std::min(static_cast<int>(todayHistory.events.size()), todayHistoryTopIndex + visible);
+  int y = listTop;
+  for (int i = todayHistoryTopIndex; i < end; ++i) {
+    char line[96];
+    snprintf(line, sizeof(line), "%s  %s", todayHistory.events[i].year, todayHistory.events[i].title.c_str());
+    const std::string title = renderer.truncatedText(UI_10_FONT_ID, line, maxWidth, EpdFontFamily::BOLD);
+    renderer.drawText(UI_10_FONT_ID, rect.x + 10, y, title.c_str(), true, EpdFontFamily::BOLD);
     y += renderer.getLineHeight(UI_10_FONT_ID) + 2;
+
+    const std::string desc =
+        renderer.truncatedText(SMALL_FONT_ID, todayHistory.events[i].desc.c_str(), maxWidth, EpdFontFamily::REGULAR);
+    renderer.drawText(SMALL_FONT_ID, rect.x + 10, y, desc.c_str());
+    y += renderer.getLineHeight(SMALL_FONT_ID) + 5;
+  }
+
+  if (todayHistory.events.size() > static_cast<size_t>(visible)) {
+    const int scrollX = rect.x + rect.width - 5;
+    const int scrollTop = listTop;
+    const int scrollH = rect.y + rect.height - listTop - 6;
+    const int maxTop = std::max(1, static_cast<int>(todayHistory.events.size()) - visible);
+    const int thumbH = std::max(12, scrollH * visible / static_cast<int>(todayHistory.events.size()));
+    const int thumbY = scrollTop + (scrollH - thumbH) * todayHistoryTopIndex / maxTop;
+    renderer.drawLine(scrollX, scrollTop, scrollX, scrollTop + scrollH, true);
+    renderer.fillRect(scrollX - 2, thumbY, 3, thumbH, true);
   }
 }
 
@@ -281,24 +384,16 @@ void HomeActivity::render(RenderLock&&) {
   // Build menu items dynamically
   std::vector<const char*> menuItems = {tr(STR_APP_SUITE), tr(STR_BROWSE_FILES), tr(STR_MENU_RECENT_BOOKS),
                                         tr(STR_FILE_TRANSFER), tr(STR_SETTINGS_TITLE)};
-  std::vector<UIIcon> menuIcons = {Library, Folder, Recent, Transfer, Settings};
-
   if (hasOpdsUrl) {
     // Insert OPDS Browser after File Browser
     menuItems.insert(menuItems.begin() + 2, tr(STR_OPDS_BROWSER));
-    menuIcons.insert(menuIcons.begin() + 2, Library);
   }
 
-  const Rect quoteRect = dailyQuoteRect(pageWidth, pageHeight);
-  const Rect menuRect{0, metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing, pageWidth,
-                      quoteRect.y - (metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing) -
-                          HOME_QUOTE_TOP_MARGIN};
-  GUI.drawButtonMenu(
-      renderer, menuRect, static_cast<int>(menuItems.size()), selectorIndex - recentBooks.size(),
-      [&menuItems](int index) { return std::string(menuItems[index]); },
-      [&menuIcons](int index) { return menuIcons[index]; });
+  const Rect historyRect = todayHistoryRect(pageWidth, pageHeight);
+  const Rect menuRect = homeMenuRect(pageWidth, pageHeight);
+  drawCompactHomeMenu(menuRect, menuItems);
 
-  drawDailyQuote(quoteRect);
+  drawTodayHistory(historyRect);
 
   const auto labels = mappedInput.mapLabels("", tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

@@ -73,6 +73,7 @@ Feasible as a staged migration. The current project should not import the refere
       long-press jump.
 - [x] Add cached SHWGIJ daily quote display on Home and a refreshable Daily Quote app.
 - [x] Add cached SHWGIJ hot-news app with manual refresh and scrollable news list.
+- [x] Replace the Home daily quote panel with cached SHWGIJ On This Day history and scrollable display.
 
 ## Implementation Log
 
@@ -134,3 +135,7 @@ Feasible as a staged migration. The current project should not import the refere
 - 2026-08-12: Added `NewsDataClient` for `https://api.shwgij.com/api/news/fastnews/news_rest`, sharing the same SHWGIJ
   token, applying a 1500 ms request throttle for the free-tier 1 QPS limit, caching under
   `/.crosspoint/news/hot.json`, and exposing a Hot News app with refresh plus touch/button scrolling.
+- 2026-08-12: Added `TodayHistoryClient` for `https://api.shwgij.com/api/today/onthisday`, sharing the SHWGIJ token,
+  applying a 1500 ms throttle, caching up to 16 events under `/.crosspoint/today/onthisday.json`, replacing the Home
+  daily quote panel with a scrollable "On This Day" panel, and drawing a tighter Home menu locally so the lower content
+  area is larger without changing global list spacing.

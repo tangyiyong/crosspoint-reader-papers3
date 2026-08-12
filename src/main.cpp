@@ -31,6 +31,7 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "quote/QuoteDataClient.h"
+#include "today/TodayHistoryClient.h"
 #include "util/ButtonNavigator.h"
 #include "util/ScreenshotUtil.h"
 #include "WifiCredentialStore.h"
@@ -105,6 +106,7 @@ void autoConnectWifiOnBootIfEnabled() {
   }
   syncCurrentCalendarMonthFromSystemTime();
   QuoteDataClient::syncDailyIfNeeded(false);
+  TodayHistoryClient::syncToday(false);
 }
 }  // namespace
 

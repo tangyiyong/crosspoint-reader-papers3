@@ -15,6 +15,7 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "quote/QuoteDataClient.h"
+#include "today/TodayHistoryClient.h"
 
 void WifiSelectionActivity::onEnter() {
   Activity::onEnter();
@@ -735,6 +736,7 @@ void WifiSelectionActivity::renderForgetPrompt() const {
 void WifiSelectionActivity::onComplete(const bool connected) {
   if (connected) {
     QuoteDataClient::syncDailyIfNeeded(false);
+    TodayHistoryClient::syncToday(false);
   }
   ActivityResult result;
   result.isCancelled = !connected;
