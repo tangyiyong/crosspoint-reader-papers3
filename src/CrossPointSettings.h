@@ -224,8 +224,9 @@ class CrossPointSettings {
   char opdsServerUrl[128] = "";
   char opdsUsername[64] = "";
   char opdsPassword[64] = "";
-  // Calendar/almanac API. Supports {year} and {month} placeholders; otherwise year/month are appended as query args.
+  // Calendar/almanac API override. Empty uses the built-in SHWGIJ endpoint with calendarApiToken.
   char calendarApiUrl[192] = "";
+  char calendarApiToken[48] = "DKUgqEcey9NCsBAYiknp1fK3al";
   // Auto-connect to the last saved WiFi network during boot/wake.
   uint8_t autoConnectWifiOnBoot = 0;
   // Hide battery percentage

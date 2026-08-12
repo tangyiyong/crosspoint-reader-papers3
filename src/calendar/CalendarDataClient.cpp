@@ -15,6 +15,7 @@
 
 namespace {
 constexpr char CALENDAR_CACHE_DIR[] = "/.crosspoint/calendar";
+constexpr char SHWGIJ_LUNAR_API_URL[] = "https://api.shwgij.com/api/lunars/lunar";
 constexpr size_t MAX_CALENDAR_CACHE_BYTES = 50000;
 constexpr unsigned long SHWGIJ_MIN_REQUEST_INTERVAL_MS = 1500;
 unsigned long lastCalendarRequestAt = 0;
@@ -76,9 +77,15 @@ void populateDayInfoFromGenericObject(CalendarDayInfo& outInfo, JsonVariantConst
   copyFirstNonEmpty(outInfo.almanacGood, sizeof(outInfo.almanacGood), obj, "good", "yi");
   copyFirstNonEmpty(outInfo.almanacBad, sizeof(outInfo.almanacBad), obj, "bad", "ji");
 }
+
+const char* effectiveCalendarApiUrl() {
+  return SETTINGS.calendarApiUrl[0] != '\0' ? SETTINGS.calendarApiUrl : SHWGIJ_LUNAR_API_URL;
+}
 }  // namespace
 
-bool CalendarDataClient::hasConfiguredApi() { return SETTINGS.calendarApiUrl[0] != '\0'; }
+bool CalendarDataClient::hasConfiguredApi() {
+  return SETTINGS.calendarApiUrl[0] != '\0' || SETTINGS.calendarApiToken[0] != '\0';
+}
 
 std::string CalendarDataClient::cachePath(const int year, const int month) {
   char path[64];
@@ -87,7 +94,7 @@ std::string CalendarDataClient::cachePath(const int year, const int month) {
 }
 
 bool CalendarDataClient::isShwgijApi() {
-  const std::string url = SETTINGS.calendarApiUrl;
+  const std::string url = effectiveCalendarApiUrl();
   return url.find("api.shwgij.com/api/lunars/lunar") != std::string::npos;
 }
 
@@ -138,7 +145,7 @@ void CalendarDataClient::waitForApiRateLimit() {
 }
 
 std::string CalendarDataClient::buildDayUrl(const int year, const int month, const int day) {
-  std::string url = SETTINGS.calendarApiUrl;
+  std::string url = effectiveCalendarApiUrl();
   char yearBuf[8];
   char monthBuf[4];
   char dayBuf[4];
@@ -158,6 +165,12 @@ std::string CalendarDataClient::buildDayUrl(const int year, const int month, con
   replaceAll(url, "{date}", dateBuf);
 
   if (isShwgijApi() || (!hasYearPlaceholder && !hasMonthPlaceholder && !hasDayPlaceholder && !hasDatePlaceholder)) {
+    if (isShwgijApi() && url.find("key=") == std::string::npos && SETTINGS.calendarApiToken[0] != '\0') {
+      const char sep = url.find('?') == std::string::npos ? '?' : '&';
+      url += sep;
+      url += "key=";
+      url += SETTINGS.calendarApiToken;
+    }
     if (url.find("date=") == std::string::npos) {
       const char sep = url.find('?') == std::string::npos ? '?' : '&';
       url += sep;
@@ -171,7 +184,7 @@ std::string CalendarDataClient::buildDayUrl(const int year, const int month, con
 }
 
 std::string CalendarDataClient::buildMonthUrl(const int year, const int month) {
-  std::string url = SETTINGS.calendarApiUrl;
+  std::string url = effectiveCalendarApiUrl();
   const bool hasYearPlaceholder = url.find("{year}") != std::string::npos;
   const bool hasMonthPlaceholder = url.find("{month}") != std::string::npos;
   if (hasYearPlaceholder) {

@@ -67,6 +67,8 @@ Feasible as a staged migration. The current project should not import the refere
 - [x] Add calendar API settings, monthly cache sync, and optional boot/wake WiFi auto-connect.
 - [x] Add SHWGIJ lunar/almanac day API adapter with per-day sync and offline month cache merge.
 - [x] Add SHWGIJ API cache-first access and request throttling for free-tier limits.
+- [x] Make SHWGIJ the built-in calendar API and expose only the API token in settings.
+- [x] Redraw header WiFi status as a larger high-contrast icon and keep battery percentage hidden by default.
 
 ## Implementation Log
 
@@ -111,3 +113,9 @@ Feasible as a staged migration. The current project should not import the refere
 - 2026-08-12: Added cache-first access for day sync and a 1500 ms minimum interval between SHWGIJ HTTP requests. This keeps
   repeated date taps well below the free-tier limit of 10 requests per second and avoids consuming daily quota for dates
   that are already cached on SD.
+- 2026-08-12: Hardcoded the default calendar provider endpoint to `https://api.shwgij.com/api/lunars/lunar`, added
+  `calendarApiToken` as the user-facing setting, and seeded it with the free API token so a fresh firmware image can fetch
+  lunar data without requiring a full URL to be configured first. `calendarApiUrl` remains available as an internal
+  override for custom providers.
+- 2026-08-12: Replaced the scaled WiFi bitmap in Base/Lyra headers with direct 20x18 two-pixel arc drawing plus a clear
+  diagonal disconnected mark. Confirmed `hideBatteryPercentage` remains defaulted to `HIDE_ALWAYS`.

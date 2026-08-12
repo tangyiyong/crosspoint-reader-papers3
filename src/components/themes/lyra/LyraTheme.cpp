@@ -59,10 +59,17 @@ void drawHeaderClock(const GfxRenderer& renderer, const Rect rect) {
 
 void drawHeaderWifiStatus(const GfxRenderer& renderer, const int x, const int y) {
   const bool connected = isWifiConnected();
-  constexpr int iconSize = 18;
-  renderer.drawIcon(WifiIcon, x, y - 1, iconSize, iconSize);
+  constexpr int w = 20;
+  constexpr int baseY = 17;
+  constexpr int cx = 10;
+  renderer.fillRect(x, y - 1, w, 18, false);
+  renderer.drawArc(9, x + cx, y + baseY, -1, -1, 2, true);
+  renderer.drawArc(9, x + cx, y + baseY, 1, -1, 2, true);
+  renderer.drawArc(6, x + cx, y + baseY, -1, -1, 2, true);
+  renderer.drawArc(6, x + cx, y + baseY, 1, -1, 2, true);
+  renderer.drawLine(x + cx - 1, y + baseY - 1, x + cx + 1, y + baseY - 1, 2, true);
   if (!connected) {
-    renderer.drawLine(x + 1, y + iconSize - 2, x + iconSize - 2, y, 2, true);
+    renderer.drawLine(x + 2, y + 15, x + 17, y, 2, true);
   }
 }
 
