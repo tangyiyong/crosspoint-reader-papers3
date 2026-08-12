@@ -299,30 +299,34 @@ void AppSuiteActivity::render(RenderLock&&) {
     const int local = i - pageStart;
     const int row = local / gridCols();
     const int col = local % gridCols();
-    const int x = gridRect.x + col * cellW + 5;
-    const int y = gridRect.y + row * cellH + 4;
-    const int w = cellW - 10;
-    const int h = cellH - 8;
+    const int x = gridRect.x + col * cellW + 4;
+    const int y = gridRect.y + row * cellH + 3;
+    const int w = cellW - 8;
+    const int h = cellH - 6;
     const bool selected = i == selectedIndex;
     renderer.fillRect(x, y, w, h, selected);
     renderer.drawRect(x, y, w, h, 2, !selected);
 
     const BuiltInApp app = itemAt(i);
-    const int iconSize = std::min(34, std::max(26, h / 3));
-    const int iconY = y + 8;
+    const int iconSize = std::min(24, std::max(18, h / 4));
+    const int iconY = y + std::max(5, h / 12);
     drawAppIcon(app, x + w / 2, iconY, iconSize, selected);
 
-    const char* title = I18N.get(labelFor(itemAt(i)));
-    const char* value = I18N.get(valueFor(itemAt(i)));
-    const int titleWidth = renderer.getTextWidth(UI_10_FONT_ID, title);
+    const int textMaxWidth = w - 8;
+    const std::string title = renderer.truncatedText(UI_10_FONT_ID, I18N.get(labelFor(app)), textMaxWidth,
+                                                     EpdFontFamily::BOLD);
+    const int titleWidth = renderer.getTextWidth(UI_10_FONT_ID, title.c_str(), EpdFontFamily::BOLD);
     const int titleX = x + (w - titleWidth) / 2;
-    const int titleY = iconY + iconSize + 6;
-    renderer.drawText(UI_10_FONT_ID, titleX, titleY, title, !selected, EpdFontFamily::BOLD);
+    const int titleY = iconY + iconSize + 4;
+    renderer.drawText(UI_10_FONT_ID, titleX, titleY, title.c_str(), !selected, EpdFontFamily::BOLD);
 
-    const int valueWidth = renderer.getTextWidth(SMALL_FONT_ID, value);
-    const int valueX = x + (w - valueWidth) / 2;
-    const int valueY = titleY + renderer.getLineHeight(UI_10_FONT_ID) + 4;
-    renderer.drawText(SMALL_FONT_ID, valueX, valueY, value, !selected);
+    const int valueY = titleY + renderer.getLineHeight(UI_10_FONT_ID) + 2;
+    if (valueY + renderer.getLineHeight(SMALL_FONT_ID) < y + h - 2) {
+      const std::string value = renderer.truncatedText(SMALL_FONT_ID, I18N.get(valueFor(app)), textMaxWidth);
+      const int valueWidth = renderer.getTextWidth(SMALL_FONT_ID, value.c_str());
+      const int valueX = x + (w - valueWidth) / 2;
+      renderer.drawText(SMALL_FONT_ID, valueX, valueY, value.c_str(), !selected);
+    }
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));

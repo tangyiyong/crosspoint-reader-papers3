@@ -60,7 +60,7 @@ Feasible as a staged migration. The current project should not import the refere
 - [x] Build and verify.
 - [x] Commit and push the app-suite branch.
 - [x] Convert app suite from list rows to tappable app tiles.
-- [x] Refine app suite to a compact 2x4 icon grid.
+- [x] Refine app suite to a compact 3x5 icon grid.
 - [x] Add file-browser edge navigation semantics for Back/Enter and top/bottom edge actions.
 - [x] Add reader quick-bar Jump entry and percent slider access.
 
@@ -84,5 +84,6 @@ Feasible as a staged migration. The current project should not import the refere
 - 2026-08-12: `git diff --check` passed.
 - 2026-08-12: `pio run` completed successfully after the app tile and gesture refinements.
 - 2026-08-12: Refined `AppSuiteActivity` from 2x3 large tiles to a compact 2x4 icon grid using drawn line icons instead of bitmap assets to avoid extra Flash/PSRAM pressure.
+- 2026-08-12: Tightened `AppSuiteActivity` further to a 3x5 icon grid, reduced icon size, and added UTF-8-safe title/status truncation for narrow tiles.
 - 2026-08-12: `git diff --check` passed.
 - 2026-08-12: `pio run` completed successfully after the compact icon grid update.
