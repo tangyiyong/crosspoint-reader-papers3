@@ -77,7 +77,7 @@ bool HttpDownloader::fetchUrl(const std::string& url, Stream& outContent, const 
   }
 
   const int httpCode = http.GET();
-  if (httpCode != HTTP_CODE_OK) {
+  if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_CREATED) {
     LOG_ERR("HTTP", "Fetch failed: %d", httpCode);
     http.end();
     return false;
@@ -129,7 +129,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
   }
 
   const int httpCode = http.GET();
-  if (httpCode != HTTP_CODE_OK) {
+  if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_CREATED) {
     LOG_ERR("HTTP", "Download failed: %d", httpCode);
     http.end();
     return HTTP_ERROR;

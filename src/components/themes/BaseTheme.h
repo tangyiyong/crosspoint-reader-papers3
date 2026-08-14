@@ -72,15 +72,20 @@ enum UIIcon { Folder, Text, Image, Book, File, Recent, Settings, Transfer, Libra
 namespace BaseMetrics {
 constexpr ThemeMetrics values = {.batteryWidth = 15,
                                  .batteryHeight = 12,
-                                 .topPadding = 5,
+	                                 .topPadding =
+#if CROSSPOINT_PAPERS3
+	                                     0,
+#else
+	                                     2,
+#endif
                                  .batteryBarHeight = 20,
-                                 .headerHeight = 45,
-                                 .verticalSpacing = 10,
+                                 .headerHeight = 38,
+                                 .verticalSpacing = 6,
                                  .contentSidePadding = 20,
                                  .listRowHeight = 30,
                                  .listWithSubtitleRowHeight = 65,
                                  .menuRowHeight = 45,
-                                 .menuSpacing = 8,
+                                 .menuSpacing = 4,
                                  .tabSpacing = 10,
                                  .tabBarHeight = 50,
                                  .scrollBarWidth = 4,
@@ -89,7 +94,11 @@ constexpr ThemeMetrics values = {.batteryWidth = 15,
                                  .homeCoverHeight = 400,
                                  .homeCoverTileHeight = 400,
                                  .homeRecentBooksCount = 1,
-                                 .buttonHintsHeight = 40,
+#if CROSSPOINT_PAPERS3
+	                                 .buttonHintsHeight = 70,
+#else
+	                                 .buttonHintsHeight = 36,
+#endif
                                  .sideButtonHintsWidth = 30,
                                  .progressBarHeight = 16,
                                  .progressBarMarginTop = 1,

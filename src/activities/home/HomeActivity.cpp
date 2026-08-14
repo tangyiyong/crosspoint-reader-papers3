@@ -21,11 +21,15 @@
 #include "fontIds.h"
 
 namespace {
-constexpr int HOME_TODAY_HISTORY_HEIGHT = 160;
-constexpr int HOME_TODAY_HISTORY_TOP_MARGIN = 6;
+constexpr int HOME_QUOTE_HEIGHT = 112;
+constexpr int HOME_QUOTE_TOP_MARGIN = 14;
 constexpr int HOME_MENU_VERTICAL_PADDING = 5;
-constexpr int HOME_MENU_ROW_HEIGHT = 42;
-constexpr int HOME_MENU_SPACING = 4;
+constexpr int HOME_MENU_ROW_HEIGHT = 46;
+constexpr int HOME_MENU_SPACING = 8;
+
+int homeMenuHeight(const int itemCount) {
+  return itemCount * HOME_MENU_ROW_HEIGHT + std::max(0, itemCount - 1) * HOME_MENU_SPACING;
+}
 }  // namespace
 
 int HomeActivity::getMenuItemCount() const {
@@ -130,7 +134,7 @@ void HomeActivity::onEnter() {
 
   const auto& metrics = UITheme::getInstance().getMetrics();
   loadRecentBooks(metrics.homeRecentBooksCount);
-  loadTodayHistoryCache();
+  loadQuoteCache();
 
   // Trigger first update
   requestUpdate();
@@ -195,20 +199,12 @@ void HomeActivity::loop() {
     return;
   }
 
-  if (!todayHistorySyncAttempted) {
-    syncTodayHistoryIfNeeded();
+  if (!quoteSyncAttempted) {
+    syncQuoteIfNeeded();
     return;
   }
 
-  const Rect historyRect = todayHistoryRect(pageWidth, pageHeight);
   if (mappedInput.wasContentSwipedUp() || mappedInput.wasContentSwipedDown()) {
-    const int maxTop = std::max(0, static_cast<int>(todayHistory.events.size()) - todayHistoryVisibleItems(historyRect));
-    if (mappedInput.wasContentSwipedUp()) {
-      todayHistoryTopIndex = std::min(maxTop, todayHistoryTopIndex + todayHistoryVisibleItems(historyRect));
-    } else {
-      todayHistoryTopIndex = std::max(0, todayHistoryTopIndex - todayHistoryVisibleItems(historyRect));
-    }
-    requestUpdate();
     return;
   }
 
@@ -216,16 +212,14 @@ void HomeActivity::loop() {
     const int touchX = mappedInput.getTouchX();
     const int touchY = mappedInput.getTouchY();
     const Rect coverRect{0, metrics.homeTopPadding, pageWidth, metrics.homeCoverTileHeight};
-    if (!recentBooks.empty() && touchX >= coverRect.x && touchX < coverRect.x + coverRect.width &&
-        touchY >= coverRect.y && touchY < coverRect.y + coverRect.height) {
-      if (recentBooks.size() == 1) {
-        selectorIndex = 0;
-        onSelectBook(recentBooks[selectorIndex].path);
-        return;
-      }
+    const int tappedBookIndex = hitTestRecentBook(coverRect, touchX, touchY);
+    if (tappedBookIndex >= 0) {
+      selectorIndex = tappedBookIndex;
+      onSelectBook(recentBooks[selectorIndex].path);
+      return;
     }
 
-    const Rect menuRect = homeMenuRect(pageWidth, pageHeight);
+    const Rect menuRect = homeMenuRect(pageWidth, pageHeight, menuCount - static_cast<int>(recentBooks.size()));
     const int tappedMenuIndex =
         hitTestHomeMenu(menuRect, menuCount - static_cast<int>(recentBooks.size()), mappedInput.getTouchX(),
                         mappedInput.getTouchY());
@@ -251,119 +245,186 @@ void HomeActivity::loop() {
   }
 }
 
+int HomeActivity::hitTestRecentBook(const Rect rect, const int touchX, const int touchY) const {
+  if (recentBooks.empty() || touchX < rect.x || touchX >= rect.x + rect.width || touchY < rect.y ||
+      touchY >= rect.y + rect.height) {
+    return -1;
+  }
+
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int visibleCount = std::min(static_cast<int>(recentBooks.size()), metrics.homeRecentBooksCount);
+  if (visibleCount <= 0) {
+    return -1;
+  }
+
+  const int tileAreaX = rect.x + metrics.contentSidePadding;
+  const int tileAreaW = rect.width - metrics.contentSidePadding * 2;
+  if (touchX < tileAreaX || touchX >= tileAreaX + tileAreaW) {
+    return -1;
+  }
+
+  const int tileW = tileAreaW / visibleCount;
+  if (tileW <= 0) {
+    return -1;
+  }
+  const int index = std::min((touchX - tileAreaX) / tileW, visibleCount - 1);
+  return index < static_cast<int>(recentBooks.size()) ? index : -1;
+}
+
 int HomeActivity::hitTestHomeMenu(const Rect rect, const int itemCount, const int touchX, const int touchY) const {
-  if (touchX < rect.x || touchX >= rect.x + rect.width || touchY < rect.y || touchY >= rect.y + rect.height) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int rowX = rect.x + metrics.contentSidePadding;
+  const int rowW = rect.width - metrics.contentSidePadding * 2;
+  if (touchX < rowX || touchX >= rowX + rowW || touchY < rect.y || touchY >= rect.y + rect.height) {
     return -1;
   }
   for (int i = 0; i < itemCount; ++i) {
-    const int y = rect.y + i * (HOME_MENU_ROW_HEIGHT + HOME_MENU_SPACING);
-    if (touchY >= y && touchY < y + HOME_MENU_ROW_HEIGHT) {
+    const int rowY = rect.y + i * (HOME_MENU_ROW_HEIGHT + HOME_MENU_SPACING);
+    if (touchY >= rowY && touchY < rowY + HOME_MENU_ROW_HEIGHT) {
       return i;
     }
   }
   return -1;
 }
 
-void HomeActivity::drawCompactHomeMenu(const Rect rect, const std::vector<const char*>& menuItems) {
+void HomeActivity::drawHomeMenu(const Rect rect, const std::vector<const char*>& menuItems) {
   const int selectedMenuIndex = selectorIndex - static_cast<int>(recentBooks.size());
-  const int rowW = rect.width - UITheme::getInstance().getMetrics().contentSidePadding * 2;
-  const int rowX = rect.x + UITheme::getInstance().getMetrics().contentSidePadding;
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int rowW = rect.width - metrics.contentSidePadding * 2;
+  const int rowX = rect.x + metrics.contentSidePadding;
+
+  auto iconFor = [this](int index) {
+    int i = 0;
+    const int appSuiteIdx = i++;
+    const int fileBrowserIdx = i++;
+    const int recentsIdx = i++;
+    const int opdsLibraryIdx = hasOpdsUrl ? i++ : -1;
+    const int fileTransferIdx = i++;
+    const int settingsIdx = i;
+    if (index == appSuiteIdx) return UIIcon::Library;
+    if (index == fileBrowserIdx) return UIIcon::Folder;
+    if (index == recentsIdx) return UIIcon::Recent;
+    if (index == opdsLibraryIdx) return UIIcon::Wifi;
+    if (index == fileTransferIdx) return UIIcon::Transfer;
+    if (index == settingsIdx) return UIIcon::Settings;
+    return UIIcon::File;
+  };
+
+  auto drawIcon = [this](const UIIcon icon, const int x, const int y, const bool color) {
+    switch (icon) {
+      case UIIcon::Folder:
+        renderer.drawRect(x, y + 7, 18, 13, color);
+        renderer.drawLine(x, y + 7, x + 6, y + 3, color);
+        renderer.drawLine(x + 6, y + 3, x + 13, y + 7, color);
+        break;
+      case UIIcon::Recent:
+      case UIIcon::Book:
+        renderer.drawRect(x, y + 3, 9, 18, color);
+        renderer.drawRect(x + 9, y + 3, 9, 18, color);
+        renderer.drawLine(x + 9, y + 5, x + 9, y + 20, color);
+        break;
+      case UIIcon::Wifi:
+        renderer.drawLine(x + 2, y + 15, x + 9, y + 8, color);
+        renderer.drawLine(x + 9, y + 8, x + 16, y + 15, color);
+        renderer.drawLine(x + 5, y + 18, x + 9, y + 14, color);
+        renderer.drawLine(x + 9, y + 14, x + 13, y + 18, color);
+        renderer.fillRect(x + 8, y + 20, 3, 3, color);
+        break;
+      case UIIcon::Transfer:
+        renderer.drawRect(x + 3, y + 3, 14, 19, color);
+        renderer.drawLine(x + 10, y + 6, x + 10, y + 18, color);
+        renderer.drawLine(x + 10, y + 6, x + 6, y + 10, color);
+        renderer.drawLine(x + 10, y + 6, x + 14, y + 10, color);
+        break;
+      case UIIcon::Settings:
+        renderer.drawRect(x + 7, y + 4, 6, 17, color);
+        renderer.drawRect(x + 2, y + 9, 16, 7, color);
+        break;
+      case UIIcon::Library:
+      default:
+        renderer.drawRect(x + 2, y + 3, 16, 18, color);
+        renderer.drawLine(x + 5, y + 8, x + 15, y + 8, color);
+        renderer.drawLine(x + 5, y + 13, x + 15, y + 13, color);
+        renderer.drawLine(x + 5, y + 18, x + 12, y + 18, color);
+        break;
+    }
+  };
+
   for (int i = 0; i < static_cast<int>(menuItems.size()); ++i) {
     const int rowY = rect.y + i * (HOME_MENU_ROW_HEIGHT + HOME_MENU_SPACING);
     if (rowY + HOME_MENU_ROW_HEIGHT > rect.y + rect.height) {
       break;
     }
     const bool selected = selectedMenuIndex == i;
-    if (selected) {
-      renderer.fillRect(rowX, rowY, rowW, HOME_MENU_ROW_HEIGHT);
-    } else {
-      renderer.drawRect(rowX, rowY, rowW, HOME_MENU_ROW_HEIGHT);
-    }
-    const std::string label = renderer.truncatedText(UI_10_FONT_ID, menuItems[i], rowW - 24);
-    const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, label.c_str());
+    renderer.fillRect(rowX, rowY, rowW, HOME_MENU_ROW_HEIGHT, selected);
+    renderer.drawRect(rowX, rowY, rowW, HOME_MENU_ROW_HEIGHT, !selected);
+
+    const int iconX = rowX + 12;
+    const int iconY = rowY + (HOME_MENU_ROW_HEIGHT - 24) / 2;
+    drawIcon(iconFor(i), iconX, iconY, !selected);
+
+    const std::string label = renderer.truncatedText(UI_10_FONT_ID, menuItems[i], rowW - 56);
     const int textY = rowY + (HOME_MENU_ROW_HEIGHT - renderer.getLineHeight(UI_10_FONT_ID)) / 2;
-    renderer.drawText(UI_10_FONT_ID, rowX + (rowW - textWidth) / 2, textY, label.c_str(), !selected);
+    renderer.drawText(UI_10_FONT_ID, rowX + 44, textY, label.c_str(), !selected);
   }
 }
 
-void HomeActivity::loadTodayHistoryCache() {
-  TodayHistoryClient::loadCached(todayHistory);
-  todayHistoryTopIndex = 0;
-  todayHistorySyncAttempted = false;
+void HomeActivity::loadQuoteCache() {
+  QuoteDataClient::loadCached(homeQuote);
+  quoteSyncAttempted = false;
 }
 
-void HomeActivity::syncTodayHistoryIfNeeded() {
-  todayHistorySyncAttempted = true;
-  if (TodayHistoryClient::syncToday(true)) {
-    TodayHistoryClient::loadCached(todayHistory);
-    todayHistoryTopIndex = 0;
+void HomeActivity::syncQuoteIfNeeded() {
+  quoteSyncAttempted = true;
+  if (QuoteDataClient::syncDailyIfNeeded(true)) {
+    QuoteDataClient::loadCached(homeQuote);
     requestUpdate();
   }
 }
 
-Rect HomeActivity::todayHistoryRect(const int pageWidth, const int pageHeight) const {
+Rect HomeActivity::quoteRect(const int pageWidth, const int pageHeight, const int menuItemCount) const {
   const auto& metrics = UITheme::getInstance().getMetrics();
-  const int bottom = pageHeight - metrics.buttonHintsHeight - metrics.verticalSpacing;
-  return Rect{metrics.contentSidePadding, bottom - HOME_TODAY_HISTORY_HEIGHT, pageWidth - metrics.contentSidePadding * 2,
-              HOME_TODAY_HISTORY_HEIGHT};
+  const Rect menuRect = homeMenuRect(pageWidth, pageHeight, menuItemCount);
+  const int top = menuRect.y + menuRect.height + HOME_QUOTE_TOP_MARGIN;
+  const int bottom = pageHeight - metrics.buttonHintsHeight - GfxRenderer::VIEWABLE_MARGIN_BOTTOM - metrics.verticalSpacing;
+  const int height = std::min(HOME_QUOTE_HEIGHT, std::max(72, bottom - top));
+  return Rect{metrics.contentSidePadding, top, pageWidth - metrics.contentSidePadding * 2, height};
 }
 
-Rect HomeActivity::homeMenuRect(const int pageWidth, const int pageHeight) const {
+Rect HomeActivity::homeMenuRect(const int pageWidth, const int pageHeight, const int menuItemCount) const {
   const auto& metrics = UITheme::getInstance().getMetrics();
-  const Rect historyRect = todayHistoryRect(pageWidth, pageHeight);
   const int menuTop = metrics.homeTopPadding + metrics.homeCoverTileHeight + HOME_MENU_VERTICAL_PADDING;
-  return Rect{0, menuTop, pageWidth, historyRect.y - menuTop - HOME_TODAY_HISTORY_TOP_MARGIN};
+  const int bottom = pageHeight - metrics.buttonHintsHeight - GfxRenderer::VIEWABLE_MARGIN_BOTTOM - metrics.verticalSpacing;
+  const int desiredHeight = homeMenuHeight(menuItemCount);
+  const int maxHeight = std::max(0, bottom - menuTop - HOME_QUOTE_TOP_MARGIN - HOME_QUOTE_HEIGHT);
+  return Rect{0, menuTop, pageWidth, std::min(desiredHeight, maxHeight)};
 }
 
-int HomeActivity::todayHistoryVisibleItems(const Rect rect) const {
-  const int itemH = renderer.getLineHeight(UI_10_FONT_ID) + renderer.getLineHeight(SMALL_FONT_ID) + 7;
-  return std::max(1, (rect.height - 34) / std::max(1, itemH));
-}
-
-void HomeActivity::drawTodayHistory(const Rect rect) const {
+void HomeActivity::drawHomeQuote(const Rect rect) const {
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height, true);
   const int titleY = rect.y + 8;
-  renderer.drawText(SMALL_FONT_ID, rect.x + 10, titleY, tr(STR_TODAY_HISTORY), true, EpdFontFamily::BOLD);
+  renderer.drawText(SMALL_FONT_ID, rect.x + 10, titleY, tr(STR_APP_DAILY_QUOTE), true, EpdFontFamily::BOLD);
 
-  if (todayHistory.update[0] != '\0') {
-    const int updateWidth = renderer.getTextWidth(SMALL_FONT_ID, todayHistory.update);
-    renderer.drawText(SMALL_FONT_ID, rect.x + rect.width - 10 - updateWidth, titleY, todayHistory.update);
+  if (homeQuote.type[0] != '\0') {
+    const std::string type = renderer.truncatedText(SMALL_FONT_ID, homeQuote.type, rect.width / 2);
+    const int typeWidth = renderer.getTextWidth(SMALL_FONT_ID, type.c_str());
+    renderer.drawText(SMALL_FONT_ID, rect.x + rect.width - 10 - typeWidth, titleY, type.c_str());
   }
 
-  if (!todayHistory.hasAny) {
+  if (!homeQuote.hasAny) {
     renderer.drawText(UI_10_FONT_ID, rect.x + 10, titleY + renderer.getLineHeight(SMALL_FONT_ID) + 10,
-                      tr(STR_TODAY_HISTORY_EMPTY));
+                      tr(STR_QUOTE_EMPTY));
     return;
   }
 
-  const int listTop = titleY + renderer.getLineHeight(SMALL_FONT_ID) + 8;
+  const int quoteTop = titleY + renderer.getLineHeight(SMALL_FONT_ID) + 8;
   const int maxWidth = rect.width - 20;
-  const int itemH = renderer.getLineHeight(UI_10_FONT_ID) + renderer.getLineHeight(SMALL_FONT_ID) + 7;
-  const int visible = todayHistoryVisibleItems(rect);
-  const int end = std::min(static_cast<int>(todayHistory.events.size()), todayHistoryTopIndex + visible);
-  int y = listTop;
-  for (int i = todayHistoryTopIndex; i < end; ++i) {
-    char line[96];
-    snprintf(line, sizeof(line), "%s  %s", todayHistory.events[i].year, todayHistory.events[i].title.c_str());
-    const std::string title = renderer.truncatedText(UI_10_FONT_ID, line, maxWidth, EpdFontFamily::BOLD);
-    renderer.drawText(UI_10_FONT_ID, rect.x + 10, y, title.c_str(), true, EpdFontFamily::BOLD);
-    y += renderer.getLineHeight(UI_10_FONT_ID) + 2;
-
-    const std::string desc =
-        renderer.truncatedText(SMALL_FONT_ID, todayHistory.events[i].desc.c_str(), maxWidth, EpdFontFamily::REGULAR);
-    renderer.drawText(SMALL_FONT_ID, rect.x + 10, y, desc.c_str());
-    y += renderer.getLineHeight(SMALL_FONT_ID) + 5;
-  }
-
-  if (todayHistory.events.size() > static_cast<size_t>(visible)) {
-    const int scrollX = rect.x + rect.width - 5;
-    const int scrollTop = listTop;
-    const int scrollH = rect.y + rect.height - listTop - 6;
-    const int maxTop = std::max(1, static_cast<int>(todayHistory.events.size()) - visible);
-    const int thumbH = std::max(12, scrollH * visible / static_cast<int>(todayHistory.events.size()));
-    const int thumbY = scrollTop + (scrollH - thumbH) * todayHistoryTopIndex / maxTop;
-    renderer.drawLine(scrollX, scrollTop, scrollX, scrollTop + scrollH, true);
-    renderer.fillRect(scrollX - 2, thumbY, 3, thumbH, true);
+  const int maxLines = std::max(1, (rect.y + rect.height - quoteTop - 8) / (renderer.getLineHeight(UI_10_FONT_ID) + 3));
+  const auto lines = renderer.wrappedText(UI_10_FONT_ID, homeQuote.text, maxWidth, maxLines);
+  int y = quoteTop;
+  for (const auto& line : lines) {
+    renderer.drawText(UI_10_FONT_ID, rect.x + 10, y, line.c_str());
+    y += renderer.getLineHeight(UI_10_FONT_ID) + 3;
   }
 }
 
@@ -389,11 +450,11 @@ void HomeActivity::render(RenderLock&&) {
     menuItems.insert(menuItems.begin() + 2, tr(STR_OPDS_BROWSER));
   }
 
-  const Rect historyRect = todayHistoryRect(pageWidth, pageHeight);
-  const Rect menuRect = homeMenuRect(pageWidth, pageHeight);
-  drawCompactHomeMenu(menuRect, menuItems);
+  const Rect menuRect = homeMenuRect(pageWidth, pageHeight, static_cast<int>(menuItems.size()));
+  const Rect homeQuoteRect = quoteRect(pageWidth, pageHeight, static_cast<int>(menuItems.size()));
+  drawHomeMenu(menuRect, menuItems);
 
-  drawTodayHistory(historyRect);
+  drawHomeQuote(homeQuoteRect);
 
   const auto labels = mappedInput.mapLabels("", tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

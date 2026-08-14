@@ -34,6 +34,7 @@
 #include "today/TodayHistoryClient.h"
 #include "util/ButtonNavigator.h"
 #include "util/ScreenshotUtil.h"
+#include "util/WifiUtils.h"
 #include "WifiCredentialStore.h"
 
 HalDisplay display;
@@ -63,37 +64,8 @@ void autoConnectWifiOnBootIfEnabled() {
     return;
   }
 
-  const std::string ssid = WIFI_STORE.getLastConnectedSsid();
-  if (ssid.empty()) {
-    LOG_INF("WIFI", "Auto-connect enabled but no last SSID is saved");
-    return;
-  }
-
-  const auto cred = WIFI_STORE.findCredential(ssid);
-  if (!cred) {
-    LOG_INF("WIFI", "Auto-connect skipped; credential missing for last SSID");
-    return;
-  }
-
-  WiFi.persistent(false);
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect(true, true);
-  delay(100);
-  if (cred->password.empty()) {
-    WiFi.begin(cred->ssid.c_str());
-  } else {
-    WiFi.begin(cred->ssid.c_str(), cred->password.c_str());
-  }
-
-  constexpr unsigned long timeoutMs = 8000;
-  const unsigned long startedAt = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - startedAt < timeoutMs) {
-    delay(100);
-  }
-
-  if (WiFi.status() != WL_CONNECTED) {
+  if (!WifiUtils::ensureConnected()) {
     LOG_ERR("WIFI", "Auto-connect timed out");
-    WiFi.disconnect();
     return;
   }
 

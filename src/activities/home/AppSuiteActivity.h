@@ -12,18 +12,18 @@ class AppSuiteActivity final : public Activity {
     Reader,
     RecentBooks,
     Gallery,
-    Notepad,
-    Drawing,
-    Music,
     Weather,
     DailyQuote,
+    TodayHistory,
     HotNews,
+    Notepad,
+    Pomodoro,
+    Alarm,
     ClockCalendar,
     WoodenFish,
     FileManager,
     FileTransfer,
     Update,
-    Settings,
     Count,
   };
 
@@ -32,14 +32,14 @@ class AppSuiteActivity final : public Activity {
 
   static constexpr int itemCount() { return static_cast<int>(BuiltInApp::Count); }
   static BuiltInApp itemAt(int index) { return static_cast<BuiltInApp>(index); }
-  static constexpr int gridCols() { return 3; }
+  static constexpr int gridCols() { return 4; }
   static constexpr int gridRows() { return 5; }
+  static constexpr int gridCellHeight() { return 128; }
   static constexpr int gridItemsPerPage() { return gridCols() * gridRows(); }
 
   StrId labelFor(BuiltInApp app) const;
   StrId valueFor(BuiltInApp app) const;
   void activateSelected();
-  void openPlaceholder(StrId title, StrId message);
   int hitTestGrid(Rect rect, int touchX, int touchY) const;
   void drawAppIcon(BuiltInApp app, int centerX, int topY, int size, bool selected) const;
 

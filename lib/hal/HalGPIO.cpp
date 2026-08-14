@@ -132,6 +132,16 @@ void HalGPIO::update() {
 
   bool touching = touch.update();
   uint8_t numPoints = touch.getNumPoints();
+  if (ignoreTouchUntilRelease) {
+    if (!touching) {
+      ignoreTouchUntilRelease = false;
+    }
+    touchActive = false;
+    sawMultiTouch = false;
+    previousState = 0;
+    currentState = 0;
+    return;
+  }
 
   if (touching) {
     lastTouchX = touch.getX();
@@ -336,6 +346,7 @@ void HalGPIO::clearState() {
   readerTapTopReleased = false;
   touchActive = false;
   sawMultiTouch = false;
+  ignoreTouchUntilRelease = true;
   cooldownUntil = millis() + 200;  // Suppress input for 200ms after activity transition
 }
 

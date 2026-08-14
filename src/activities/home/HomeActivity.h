@@ -4,7 +4,7 @@
 
 #include "../Activity.h"
 #include "./FileBrowserActivity.h"
-#include "today/TodayHistoryClient.h"
+#include "quote/QuoteDataClient.h"
 #include "util/ButtonNavigator.h"
 
 struct RecentBook;
@@ -20,9 +20,8 @@ class HomeActivity final : public Activity {
   bool coverRendered = false;      // Track if cover has been rendered once
   bool coverBufferStored = false;  // Track if cover buffer is stored
   uint8_t* coverBuffer = nullptr;  // HomeActivity's own buffer for cover image
-  TodayHistoryInfo todayHistory;
-  int todayHistoryTopIndex = 0;
-  bool todayHistorySyncAttempted = false;
+  QuoteInfo homeQuote;
+  bool quoteSyncAttempted = false;
   std::vector<RecentBook> recentBooks;
   void onSelectBook(const std::string& path);
   void onFileBrowserOpen();
@@ -39,14 +38,14 @@ class HomeActivity final : public Activity {
   void freeCoverBuffer();     // Free the stored cover buffer
   void loadRecentBooks(int maxBooks);
   void loadRecentCovers(int coverHeight);
-  void loadTodayHistoryCache();
-  void syncTodayHistoryIfNeeded();
-  Rect todayHistoryRect(int pageWidth, int pageHeight) const;
-  Rect homeMenuRect(int pageWidth, int pageHeight) const;
-  int todayHistoryVisibleItems(Rect rect) const;
-  void drawTodayHistory(Rect rect) const;
+  void loadQuoteCache();
+  void syncQuoteIfNeeded();
+  Rect quoteRect(int pageWidth, int pageHeight, int menuItemCount) const;
+  Rect homeMenuRect(int pageWidth, int pageHeight, int menuItemCount) const;
+  void drawHomeQuote(Rect rect) const;
+  int hitTestRecentBook(Rect rect, int touchX, int touchY) const;
   int hitTestHomeMenu(Rect rect, int itemCount, int touchX, int touchY) const;
-  void drawCompactHomeMenu(Rect rect, const std::vector<const char*>& menuItems);
+  void drawHomeMenu(Rect rect, const std::vector<const char*>& menuItems);
 
  public:
   explicit HomeActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)

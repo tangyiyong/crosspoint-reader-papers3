@@ -8,16 +8,31 @@ class GfxRenderer;
 namespace LyraMetrics {
 constexpr ThemeMetrics values = {.batteryWidth = 16,
                                  .batteryHeight = 12,
-                                 .topPadding = 5,
-                                 .batteryBarHeight = 40,
-                                 .headerHeight = 84,
-                                 .verticalSpacing = 16,
+	                                 .topPadding =
+#if CROSSPOINT_PAPERS3
+	                                     0,
+#else
+	                                     2,
+#endif
+	                                 .batteryBarHeight =
+#if CROSSPOINT_PAPERS3
+		                                     30,
+#else
+	                                     40,
+#endif
+	                                 .headerHeight =
+#if CROSSPOINT_PAPERS3
+		                                     58,
+#else
+	                                     64,
+#endif
+                                 .verticalSpacing = 8,
                                  .contentSidePadding = 20,
 #if CROSSPOINT_PAPERS3
                                  .listRowHeight = 60,
                                  .listWithSubtitleRowHeight = 70,
                                  .menuRowHeight = 60,
-                                 .menuSpacing = 8,
+                                 .menuSpacing = 4,
 #else
                                  .listRowHeight = 40,
                                  .listWithSubtitleRowHeight = 60,
@@ -26,13 +41,18 @@ constexpr ThemeMetrics values = {.batteryWidth = 16,
 #endif
                                  .tabSpacing = 8,
 #if CROSSPOINT_PAPERS3
-                                 .tabBarHeight = 80,
+                                 .tabBarHeight = 56,
 #else
                                  .tabBarHeight = 40,
 #endif
                                  .scrollBarWidth = 4,
                                  .scrollBarRightOffset = 5,
-                                 .homeTopPadding = 56,
+	                                 .homeTopPadding =
+#if CROSSPOINT_PAPERS3
+	                                     34,
+#else
+	                                     42,
+#endif
 #if CROSSPOINT_PAPERS3
                                  .homeCoverHeight = 305,
                                  .homeCoverTileHeight = 327,
@@ -42,7 +62,7 @@ constexpr ThemeMetrics values = {.batteryWidth = 16,
 #endif
                                  .homeRecentBooksCount = 1,
 #if CROSSPOINT_PAPERS3
-                                 .buttonHintsHeight = 56,
+	                                 .buttonHintsHeight = 70,
                                  .sideButtonHintsWidth = 0,
 #else
                                  .buttonHintsHeight = 40,
@@ -52,7 +72,7 @@ constexpr ThemeMetrics values = {.batteryWidth = 16,
                                  .progressBarMarginTop = 1,
                                  .statusBarHorizontalMargin = 5,
 #if CROSSPOINT_PAPERS3
-                                 .statusBarVerticalMargin = 22,
+                                 .statusBarVerticalMargin = 18,
 #else
                                  .statusBarVerticalMargin = 19,
 #endif

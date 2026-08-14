@@ -89,6 +89,7 @@ class HalGPIO {
   bool readerSwipeDownFromTopEdgeReleased = false;
   bool readerSwipeUpFromBottomEdgeReleased = false;
   bool readerTapTopReleased = false;
+  bool ignoreTouchUntilRelease = false;
 
   // Gesture tracking: swipe detection + multi-finger
   bool touchActive = false;                       // A finger is currently down

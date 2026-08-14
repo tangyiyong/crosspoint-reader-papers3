@@ -666,7 +666,12 @@ void EpubReaderActivity::render(RenderLock&& lock) {
         std::max(SETTINGS.screenMargin,
                  static_cast<uint8_t>(statusBarHeight + UITheme::getInstance().getMetrics().statusBarVerticalMargin));
   } else {
+#if CROSSPOINT_PAPERS3
+    orientedMarginBottom +=
+        std::max<int>(SETTINGS.screenMargin, statusBarHeight + GfxRenderer::VIEWABLE_MARGIN_BOTTOM + 6);
+#else
     orientedMarginBottom += std::max(SETTINGS.screenMargin, statusBarHeight);
+#endif
   }
 
   if (!section) {

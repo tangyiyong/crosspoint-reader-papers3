@@ -28,6 +28,7 @@
 #include "components/icons/transfer.h"
 #include "components/icons/wifi.h"
 #include "fontIds.h"
+#include "util/WifiUtils.h"
 
 // Internal constants
 namespace {
@@ -44,7 +45,7 @@ constexpr int mainMenuColumns = 2;
 int coverWidth = 0;
 
 bool isWifiConnected() {
-  return WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0);
+  return WifiUtils::isConnected();
 }
 
 void drawHeaderClock(const GfxRenderer& renderer, const Rect rect) {
@@ -60,7 +61,7 @@ void drawHeaderClock(const GfxRenderer& renderer, const Rect rect) {
 void drawHeaderWifiStatus(const GfxRenderer& renderer, const int x, const int y) {
   const bool connected = isWifiConnected();
   constexpr int w = 20;
-  constexpr int baseY = 17;
+  constexpr int baseY = 16;
   constexpr int cx = 10;
   renderer.fillRect(x, y - 1, w, 18, false);
   renderer.drawArc(9, x + cx, y + baseY, -1, -1, 2, true);
@@ -191,20 +192,33 @@ void LyraTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
   int maxTitleWidth =
       rect.width - LyraMetrics::values.contentSidePadding * 2 - (subtitle != nullptr ? maxSubtitleWidth : 0);
 
-  if (title) {
-    auto truncatedTitle = renderer.truncatedText(UI_12_FONT_ID, title, maxTitleWidth, EpdFontFamily::BOLD);
-    renderer.drawText(UI_12_FONT_ID, rect.x + LyraMetrics::values.contentSidePadding,
-                      rect.y + LyraMetrics::values.batteryBarHeight + 3, truncatedTitle.c_str(), true,
-                      EpdFontFamily::BOLD);
-    renderer.drawLine(rect.x, rect.y + rect.height - 3, rect.x + rect.width - 1, rect.y + rect.height - 3, 3, true);
-  }
+	  if (title) {
+	    auto truncatedTitle = renderer.truncatedText(UI_12_FONT_ID, title, maxTitleWidth, EpdFontFamily::BOLD);
+	  #if CROSSPOINT_PAPERS3
+	    const int titleY = rect.y + LyraMetrics::values.batteryBarHeight;
+	  #else
+	    const int titleY = rect.y + LyraMetrics::values.batteryBarHeight + 3;
+	  #endif
+	    renderer.drawText(UI_12_FONT_ID, rect.x + LyraMetrics::values.contentSidePadding,
+	                      titleY, truncatedTitle.c_str(), true, EpdFontFamily::BOLD);
+	  #if CROSSPOINT_PAPERS3
+	    renderer.drawLine(rect.x, rect.y + rect.height - 1, rect.x + rect.width - 1, rect.y + rect.height - 1, true);
+	  #else
+	    renderer.drawLine(rect.x, rect.y + rect.height - 3, rect.x + rect.width - 1, rect.y + rect.height - 3, 3, true);
+	  #endif
+	  }
 
   if (subtitle) {
     auto truncatedSubtitle = renderer.truncatedText(SMALL_FONT_ID, subtitle, maxSubtitleWidth, EpdFontFamily::REGULAR);
     int truncatedSubtitleWidth = renderer.getTextWidth(SMALL_FONT_ID, truncatedSubtitle.c_str());
+	  #if CROSSPOINT_PAPERS3
+	    const int subtitleY = rect.y + LyraMetrics::values.batteryBarHeight + 2;
+	  #else
+	    const int subtitleY = rect.y + 50;
+	  #endif
     renderer.drawText(SMALL_FONT_ID,
                       rect.x + rect.width - LyraMetrics::values.contentSidePadding - truncatedSubtitleWidth,
-                      rect.y + 50, truncatedSubtitle.c_str(), true);
+                      subtitleY, truncatedSubtitle.c_str(), true);
   }
 }
 
@@ -373,23 +387,24 @@ void LyraTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 
   const int pageHeight = renderer.getScreenHeight();
-#if CROSSPOINT_PAPERS3
-  // Paper S3: 4 tappable buttons across 540px, matching footer touch zones in HalGPIO
-  constexpr int buttonWidth = 120;
-  constexpr int buttonHeight = LyraMetrics::values.buttonHintsHeight;
-  constexpr int buttonY = LyraMetrics::values.buttonHintsHeight;
-  constexpr int buttonPositions[] = {12, 144, 276, 408};
-  const char* labels[] = {btn1, btn2, btn3, btn4};
+	#if CROSSPOINT_PAPERS3
+	  // Paper S3: 4 tappable buttons across 540px, matching footer touch zones in HalGPIO
+	  constexpr int buttonWidth = 120;
+	  constexpr int buttonHeight = 40;
+	  constexpr int buttonPositions[] = {12, 144, 276, 408};
+	  const char* labels[] = {btn1, btn2, btn3, btn4};
+	  const int footerTop = pageHeight - LyraMetrics::values.buttonHintsHeight;
+	  const int drawY = footerTop + 6;
+	  renderer.fillRect(0, footerTop, renderer.getScreenWidth(), LyraMetrics::values.buttonHintsHeight, false);
 
   for (int i = 0; i < 4; i++) {
     if (labels[i] != nullptr && labels[i][0] != '\0') {
       const int x = buttonPositions[i];
-      renderer.fillRoundedRect(x, pageHeight - buttonY, buttonWidth, buttonHeight, cornerRadius, Color::White);
-      renderer.drawRoundedRect(x, pageHeight - buttonY, buttonWidth, buttonHeight, 1, cornerRadius, true, true, false,
-                               false, true);
+      renderer.fillRoundedRect(x, drawY, buttonWidth, buttonHeight, cornerRadius, Color::White);
+      renderer.drawRoundedRect(x, drawY, buttonWidth, buttonHeight, 1, cornerRadius, true, true, false, false, true);
       const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, labels[i]);
       const int textX = x + (buttonWidth - textWidth) / 2;
-      const int textY = pageHeight - buttonY + (buttonHeight - renderer.getLineHeight(UI_10_FONT_ID)) / 2;
+      const int textY = drawY + 6;
       renderer.drawText(UI_10_FONT_ID, textX, textY, labels[i]);
     }
   }

@@ -1245,6 +1245,43 @@ std::vector<std::string> GfxRenderer::wrappedText(const int fontId, const char* 
   std::string remaining = text;
   std::string currentLine;
 
+  auto appendLongWord = [&](const std::string& word) {
+    const auto* cursor = reinterpret_cast<const unsigned char*>(word.c_str());
+    std::string segment;
+
+    while (*cursor != '\0') {
+      const unsigned char* before = cursor;
+      const uint32_t cp = utf8NextCodepoint(&cursor);
+      if (cp == 0) {
+        break;
+      }
+
+      char encoded[5];
+      if (!encodeCodepointUtf8(cp, encoded)) {
+        continue;
+      }
+
+      const std::string testSegment = segment + encoded;
+      if (segment.empty() || getTextWidth(fontId, testSegment.c_str(), style) <= maxWidth) {
+        segment = testSegment;
+        continue;
+      }
+
+      if (static_cast<int>(lines.size()) == maxLines - 1) {
+        std::string tail = segment + reinterpret_cast<const char*>(before);
+        lines.push_back(truncatedText(fontId, tail.c_str(), maxWidth, style));
+        segment.clear();
+        return true;
+      }
+
+      lines.push_back(segment);
+      segment = encoded;
+    }
+
+    currentLine = segment;
+    return false;
+  };
+
   while (!remaining.empty()) {
     if (static_cast<int>(lines.size()) == maxLines - 1) {
       // Last available line: combine any word already started on this line with
@@ -1277,18 +1314,16 @@ std::vector<std::string> GfxRenderer::wrappedText(const int fontId, const char* 
         // push it as a complete line immediately — storing it in currentLine
         // would allow a subsequent short word to be appended after the ellipsis.
         if (getTextWidth(fontId, word.c_str(), style) > maxWidth) {
-          lines.push_back(truncatedText(fontId, word.c_str(), maxWidth, style));
           currentLine.clear();
-          if (static_cast<int>(lines.size()) >= maxLines) return lines;
+          if (appendLongWord(word) || static_cast<int>(lines.size()) >= maxLines) return lines;
         } else {
           currentLine = word;
         }
       } else {
-        // Single word wider than maxWidth: truncate and stop to avoid complicated
-        // splitting rules (different between languages). Results in an aesthetically
-        // pleasing end.
-        lines.push_back(truncatedText(fontId, word.c_str(), maxWidth, style));
-        return lines;
+        // Single word wider than maxWidth: split at UTF-8 character boundaries.
+        // This lets CJK text without spaces wrap naturally instead of being
+        // truncated as one oversized word.
+        if (appendLongWord(word) || static_cast<int>(lines.size()) >= maxLines) return lines;
       }
     }
   }

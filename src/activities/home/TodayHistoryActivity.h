@@ -1,24 +1,24 @@
 #pragma once
 
 #include "activities/Activity.h"
-#include "news/NewsDataClient.h"
+#include "today/TodayHistoryClient.h"
 #include "util/ButtonNavigator.h"
 
-class HotNewsActivity final : public Activity {
+class TodayHistoryActivity final : public Activity {
   ButtonNavigator buttonNavigator;
-  HotNewsInfo news;
+  TodayHistoryInfo todayHistory;
   int topIndex = 0;
   bool syncing = false;
   bool lastFetchFailed = false;
 
-  void refreshNews();
+  void refreshTodayHistory();
   int visibleItemCount() const;
   int itemHeight(int index, int contentWidth) const;
   int visibleEndIndex() const;
 
  public:
-  explicit HotNewsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
-      : Activity("HotNews", renderer, mappedInput) {}
+  explicit TodayHistoryActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
+      : Activity("TodayHistory", renderer, mappedInput) {}
 
   void onEnter() override;
   void loop() override;

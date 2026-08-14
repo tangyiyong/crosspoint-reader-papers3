@@ -14,15 +14,15 @@ namespace {
 
 // Normalize ISO 639-2 (three-letter) codes to ISO 639-1 (two-letter) codes used by the
 // hyphenation registry.  EPUBs may use either form in their dc:language metadata (e.g.
-// "eng" instead of "en").  Both the bibliographic ("fre"/"ger") and terminological
-// ("fra"/"deu") ISO 639-2 variants are mapped.
+// "eng" instead of "en").  Both bibliographic ("fre") and terminological
+// ("fra") ISO 639-2 variants are mapped where needed.
 struct Iso639Mapping {
   const char* iso639_2;
   const char* iso639_1;
 };
 static constexpr Iso639Mapping kIso639Mappings[] = {
-    {"eng", "en"}, {"fra", "fr"}, {"fre", "fr"}, {"deu", "de"}, {"ger", "de"},
-    {"rus", "ru"}, {"spa", "es"}, {"ita", "it"}, {"ukr", "uk"},
+      {"eng", "en"}, {"fra", "fr"}, {"fre", "fr"}, {"rus", "ru"},
+      {"spa", "es"}, {"ita", "it"}, {"ukr", "uk"},
 };
 
 // Maps a BCP-47 or ISO 639-2 language tag to a language-specific hyphenator.

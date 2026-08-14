@@ -343,7 +343,12 @@ void TxtReaderActivity::initializeReader() {
   cachedOrientedMarginLeft += cachedScreenMargin;
   cachedOrientedMarginRight += cachedScreenMargin;
   cachedOrientedMarginBottom +=
+#if CROSSPOINT_PAPERS3
+      std::max<int>(cachedScreenMargin,
+                    UITheme::getInstance().getStatusBarHeight() + GfxRenderer::VIEWABLE_MARGIN_BOTTOM + 6);
+#else
       std::max(cachedScreenMargin, static_cast<uint8_t>(UITheme::getInstance().getStatusBarHeight()));
+#endif
 
   viewportWidth = renderer.getScreenWidth() - cachedOrientedMarginLeft - cachedOrientedMarginRight;
   const int viewportHeight = renderer.getScreenHeight() - cachedOrientedMarginTop - cachedOrientedMarginBottom;

@@ -4,6 +4,7 @@
 #include <FontManager.h>
 #include <GfxRenderer.h>
 #include <Logging.h>
+#include <WiFi.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -30,6 +31,7 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/ExternalFontLabel.h"
+#include "util/WifiUtils.h"
 
 const StrId SettingsActivity::categoryNames[categoryCount] = {StrId::STR_CAT_DISPLAY, StrId::STR_CAT_READER,
                                                               StrId::STR_CAT_CONTROLS, StrId::STR_CAT_SYSTEM};
@@ -444,6 +446,9 @@ void SettingsActivity::render(RenderLock&&) {
           } else {
             valueText = tr(STR_BUILTIN_FONT);
           }
+        } else if (setting.type == SettingType::ACTION && setting.nameId == StrId::STR_WIFI_NETWORKS &&
+                   WifiUtils::isConnected()) {
+          valueText = WiFi.SSID().c_str();
         } else if (setting.type == SettingType::STRING && setting.stringOffset > 0) {
           const char* value = reinterpret_cast<const char*>(&SETTINGS) + setting.stringOffset;
           valueText = value[0] != '\0' ? value : tr(STR_NOT_SET);

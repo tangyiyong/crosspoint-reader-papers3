@@ -9,8 +9,8 @@
 #include <cstdio>
 
 #include "CrossPointSettings.h"
-#include "WifiCredentialStore.h"
 #include "network/HttpDownloader.h"
+#include "util/WifiUtils.h"
 
 namespace {
 constexpr char NEWS_CACHE_DIR[] = "/.crosspoint/news";
@@ -32,36 +32,7 @@ void copyJsonString(char* dest, const size_t destSize, JsonVariantConst value) {
 bool NewsDataClient::hasConfiguredApi() { return SETTINGS.calendarApiToken[0] != '\0'; }
 
 bool NewsDataClient::ensureWifiConnectedFromSavedCredential() {
-  if (WiFi.status() == WL_CONNECTED) {
-    return true;
-  }
-
-  const std::string ssid = WIFI_STORE.getLastConnectedSsid();
-  if (ssid.empty()) {
-    return false;
-  }
-
-  const auto cred = WIFI_STORE.findCredential(ssid);
-  if (!cred) {
-    return false;
-  }
-
-  WiFi.persistent(false);
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect(true, true);
-  delay(100);
-  if (cred->password.empty()) {
-    WiFi.begin(cred->ssid.c_str());
-  } else {
-    WiFi.begin(cred->ssid.c_str(), cred->password.c_str());
-  }
-
-  constexpr unsigned long timeoutMs = 8000;
-  const unsigned long startedAt = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - startedAt < timeoutMs) {
-    delay(100);
-  }
-  return WiFi.status() == WL_CONNECTED;
+  return WifiUtils::ensureConnectedFromSavedCredential();
 }
 
 void NewsDataClient::waitForApiRateLimit() {
@@ -83,7 +54,7 @@ bool NewsDataClient::fetchHotNews(const bool allowSavedWifiConnect) {
   if (!hasConfiguredApi()) {
     return false;
   }
-  if (WiFi.status() != WL_CONNECTED && (!allowSavedWifiConnect || !ensureWifiConnectedFromSavedCredential())) {
+  if (!WifiUtils::isConnected() && (!allowSavedWifiConnect || !ensureWifiConnectedFromSavedCredential())) {
     return false;
   }
 

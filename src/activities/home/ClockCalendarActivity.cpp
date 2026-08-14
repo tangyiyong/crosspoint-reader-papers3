@@ -184,7 +184,7 @@ void ClockCalendarActivity::syncDisplayedMonthIfNeeded() {
 
   monthSyncing = true;
   requestUpdateAndWait();
-  CalendarDataClient::syncMonth(displayYear, displayMonth);
+  CalendarDataClient::syncDay(displayYear, displayMonth, selectedDay > 0 ? selectedDay : 1, true);
   monthSyncing = false;
   requestUpdate();
 }
@@ -196,10 +196,13 @@ void ClockCalendarActivity::openDayDetail(const int day) {
 
   selectedDay = day;
   if (CalendarDataClient::hasConfiguredApi()) {
-    daySyncing = true;
-    requestUpdateAndWait();
-    CalendarDataClient::syncDay(displayYear, displayMonth, selectedDay);
-    daySyncing = false;
+    CalendarDayInfo cached;
+    if (!CalendarDataClient::loadDayInfo(displayYear, displayMonth, selectedDay, cached)) {
+      daySyncing = true;
+      requestUpdateAndWait();
+      CalendarDataClient::syncDay(displayYear, displayMonth, selectedDay, true);
+      daySyncing = false;
+    }
   }
   showingDayDetail = true;
   requestUpdate();

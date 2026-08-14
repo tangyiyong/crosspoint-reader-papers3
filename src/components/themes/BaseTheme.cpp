@@ -16,6 +16,7 @@
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/WifiUtils.h"
 
 // Internal constants
 namespace {
@@ -25,7 +26,7 @@ constexpr int homeMarginTop = 30;
 constexpr int subtitleY = 738;
 
 bool isWifiConnected() {
-  return WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0);
+  return WifiUtils::isConnected();
 }
 
 void drawHeaderClock(const GfxRenderer& renderer, const Rect rect, const int y) {
@@ -102,7 +103,7 @@ void BaseTheme::drawBatteryLightningBolt(const GfxRenderer& renderer, int boltX,
 void BaseTheme::drawBatteryLeft(const GfxRenderer& renderer, Rect rect, const bool showPercentage) const {
   // Left aligned: icon on left, percentage on right (reader mode)
   const uint16_t percentage = powerManager.getBatteryPercentage();
-  const int y = rect.y + 6;
+  const int y = rect.y + 1;
 
   if (showPercentage) {
     const auto percentageText = std::to_string(percentage) + "%";
@@ -117,7 +118,7 @@ void BaseTheme::drawBatteryRight(const GfxRenderer& renderer, Rect rect, const b
   // Right aligned: percentage on left, icon on right (UI headers)
   // rect.x is already positioned for the icon (drawHeader calculated it)
   const uint16_t percentage = powerManager.getBatteryPercentage();
-  const int y = rect.y + 6;
+  const int y = rect.y + 1;
 
   if (showPercentage) {
     const auto percentageText = std::to_string(percentage) + "%";
@@ -163,22 +164,24 @@ void BaseTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 
   const int pageHeight = renderer.getScreenHeight();
-#if CROSSPOINT_PAPERS3
-  // Paper S3: 4 tappable buttons across 540px, matching footer touch zones in HalGPIO
-  constexpr int buttonWidth = 120;
-  constexpr int buttonHeight = BaseMetrics::values.buttonHintsHeight;
-  constexpr int buttonY = BaseMetrics::values.buttonHintsHeight;
-  constexpr int buttonPositions[] = {12, 144, 276, 408};
-  const char* labels[] = {btn1, btn2, btn3, btn4};
+	#if CROSSPOINT_PAPERS3
+	  // Paper S3: 4 tappable buttons across 540px, matching footer touch zones in HalGPIO
+	  constexpr int buttonWidth = 120;
+	  constexpr int buttonHeight = 40;
+	  constexpr int buttonPositions[] = {12, 144, 276, 408};
+	  const char* labels[] = {btn1, btn2, btn3, btn4};
+	  const int footerTop = pageHeight - BaseMetrics::values.buttonHintsHeight;
+	  const int drawY = footerTop + 6;
+	  renderer.fillRect(0, footerTop, renderer.getScreenWidth(), BaseMetrics::values.buttonHintsHeight, false);
 
   for (int i = 0; i < 4; i++) {
     if (labels[i] != nullptr && labels[i][0] != '\0') {
       const int x = buttonPositions[i];
-      renderer.fillRect(x, pageHeight - buttonY, buttonWidth, buttonHeight, false);
-      renderer.drawRect(x, pageHeight - buttonY, buttonWidth, buttonHeight);
+      renderer.fillRect(x, drawY, buttonWidth, buttonHeight, false);
+      renderer.drawRect(x, drawY, buttonWidth, buttonHeight);
       const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, labels[i]);
       const int textX = x + (buttonWidth - textWidth) / 2;
-      const int textY = pageHeight - buttonY + (buttonHeight - renderer.getLineHeight(UI_10_FONT_ID)) / 2;
+      const int textY = drawY + 6;
       renderer.drawText(UI_10_FONT_ID, textX, textY, labels[i]);
     }
   }
@@ -332,6 +335,7 @@ void BaseTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
 }
 
 void BaseTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* title, const char* subtitle) const {
+  renderer.fillRect(rect.x, rect.y, rect.width, rect.height, false);
   // Hide last battery draw
   constexpr int maxBatteryWidth = 80;
   renderer.fillRect(rect.x + rect.width - maxBatteryWidth, rect.y + 5, maxBatteryWidth,
@@ -670,10 +674,45 @@ void BaseTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount
                         rect.width - BaseMetrics::values.contentSidePadding * 2, BaseMetrics::values.menuRowHeight);
     }
 
+    int textLeft = rect.x + BaseMetrics::values.contentSidePadding + 16;
+    if (rowIcon != nullptr) {
+      const int iconX = textLeft;
+      const int iconY = tileY + (BaseMetrics::values.menuRowHeight - 18) / 2;
+      switch (rowIcon(i)) {
+        case UIIcon::Book:
+        case UIIcon::Recent:
+          renderer.drawRect(iconX, iconY, 9, 18, selectedIndex != i);
+          renderer.drawRect(iconX + 9, iconY, 9, 18, selectedIndex != i);
+          break;
+        case UIIcon::Folder:
+        case UIIcon::File:
+          renderer.drawRect(iconX, iconY + 4, 20, 14, selectedIndex != i);
+          renderer.drawLine(iconX + 2, iconY + 4, iconX + 8, iconY, selectedIndex != i);
+          break;
+        case UIIcon::Transfer:
+          renderer.drawRect(iconX + 1, iconY + 1, 18, 18, selectedIndex != i);
+          renderer.drawLine(iconX + 10, iconY + 4, iconX + 10, iconY + 16, selectedIndex != i);
+          renderer.drawLine(iconX + 10, iconY + 4, iconX + 6, iconY + 8, selectedIndex != i);
+          renderer.drawLine(iconX + 10, iconY + 16, iconX + 14, iconY + 12, selectedIndex != i);
+          break;
+        case UIIcon::Settings:
+          renderer.drawRect(iconX + 7, iconY + 2, 6, 16, selectedIndex != i);
+          renderer.drawRect(iconX + 2, iconY + 7, 16, 6, selectedIndex != i);
+          break;
+        case UIIcon::Library:
+        default:
+          renderer.drawRect(iconX + 2, iconY + 2, 16, 16, selectedIndex != i);
+          renderer.drawLine(iconX + 5, iconY + 7, iconX + 15, iconY + 7, selectedIndex != i);
+          renderer.drawLine(iconX + 5, iconY + 12, iconX + 15, iconY + 12, selectedIndex != i);
+          break;
+      }
+      textLeft += 34;
+    }
+
     std::string labelStr = buttonLabel(i);
     const char* label = labelStr.c_str();
     const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, label);
-    const int textX = rect.x + (rect.width - textWidth) / 2;
+    const int textX = rowIcon != nullptr ? textLeft : rect.x + (rect.width - textWidth) / 2;
     const int lineHeight = renderer.getLineHeight(UI_10_FONT_ID);
     const int textY =
         tileY + (BaseMetrics::values.menuRowHeight - lineHeight) / 2;  // vertically centered assuming y is top of text
@@ -726,13 +765,22 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   const auto screenHeight = renderer.getScreenHeight();
   const auto screenWidth = renderer.getScreenWidth();
   const int statusBarHeight = UITheme::getInstance().getStatusBarHeight();
-  const int clearY = std::max(0, screenHeight - statusBarHeight - orientedMarginBottom - paddingBottom - textYOffset);
+#if CROSSPOINT_PAPERS3
+  const int textLineHeight = std::max(statusBarHeight, renderer.getLineHeight(SMALL_FONT_ID) + 6);
+  const int safeBottom = std::max(orientedMarginBottom, GfxRenderer::VIEWABLE_MARGIN_BOTTOM);
+#else
+  const int textLineHeight = statusBarHeight;
+  const int safeBottom = orientedMarginBottom;
+#endif
+  const int clearY =
+      std::max(0, screenHeight - textLineHeight - safeBottom - paddingBottom - std::max(0, textYOffset) - 4);
   if (clearY < screenHeight) {
     renderer.fillRect(0, clearY, screenWidth, screenHeight - clearY, false);
   }
 
   // Draw Progress Text
-  auto textY = screenHeight - statusBarHeight - orientedMarginBottom - paddingBottom;
+  const int baseTextY = screenHeight - textLineHeight - safeBottom - paddingBottom;
+  auto textY = baseTextY;
   int progressTextWidth = 0;
 
   if (SETTINGS.statusBarBookProgressPercentage || SETTINGS.statusBarChapterPageCount) {
@@ -774,10 +822,17 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   const bool showBatteryPercentage =
       SETTINGS.hideBatteryPercentage == CrossPointSettings::HIDE_BATTERY_PERCENTAGE::HIDE_NEVER;
   if (SETTINGS.statusBarBattery) {
+#if CROSSPOINT_PAPERS3
+    GUI.drawBatteryLeft(renderer,
+                        Rect{metrics.statusBarHorizontalMargin + orientedMarginLeft + 1, textY + 1, metrics.batteryWidth,
+                             metrics.batteryHeight},
+                        showBatteryPercentage);
+#else
     GUI.drawBatteryLeft(renderer,
                         Rect{metrics.statusBarHorizontalMargin + orientedMarginLeft + 1, textY, metrics.batteryWidth,
                              metrics.batteryHeight},
                         showBatteryPercentage);
+#endif
   }
 
   // Draw Clock (requires BM8563 RTC; user-toggled)
@@ -794,7 +849,7 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
 
   // Draw Title
   if (!title.empty()) {
-    textY -= textYOffset;
+    textY = baseTextY - textYOffset;
     // Centered chapter title text
     // Page width minus existing content with 30px padding on each side
     const int rendererableScreenWidth =

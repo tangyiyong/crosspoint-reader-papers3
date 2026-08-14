@@ -139,3 +139,27 @@ Feasible as a staged migration. The current project should not import the refere
   applying a 1500 ms throttle, caching up to 16 events under `/.crosspoint/today/onthisday.json`, replacing the Home
   daily quote panel with a scrollable "On This Day" panel, and drawing a tighter Home menu locally so the lower content
   area is larger without changing global list spacing.
+- 2026-08-13: Replaced the Weather placeholder with a cached SHWGIJ Tencent-weather client, weather location storage
+  under `/.crosspoint/weather/locations.json`, up to 10 configured locations, 2200 ms request throttling for the 2-second
+  free-tier limit, manual refresh/next-location/add-location controls, WiFi connect prompting, and scrollable display of
+  current weather, air quality, alerts, hourly forecast, daily forecast, and tips.
+- 2026-08-13: Weather requests now require a configured province/city/county location and always use SHWGIJ `m=2` with
+  URL-encoded location parameters; IP-based `m=1` weather is intentionally not used.
+- 2026-08-13: Restored the Home middle menu to the original icon-plus-label button style while keeping tighter row spacing,
+  and reduced PaperS3 header/footer padding plus explicit header/footer clearing to reduce blank bands and e-ink ghosting.
+- 2026-08-13: Added a shared `WifiUtils` helper so News, Calendar, and Weather test both station status and local IP, and
+  can reconnect from the saved last-connected credential before reporting "connect WiFi". Settings now shows the connected
+  SSID beside the WiFi Networks action.
+- 2026-08-13: Changed calendar day-detail opening to fetch the tapped uncached date with saved-WiFi reconnect enabled before
+  showing the detail popup, preserving the cache-first behavior for dates already saved on SD.
+- 2026-08-13: Changed the Weather footer actions to Back / Refresh / Add / Remove, wired Add to the province-city-county
+  entry flow, kept content swipe for scrolling, and made Remove delete the selected saved weather location.
+- 2026-08-13: Added lightweight Notepad, Pomodoro, and Alarm apps to the app grid and removed Settings from the Apps page.
+  Notepad stores one UTF-8 note under `/.crosspoint/notepad.txt`; Pomodoro and Alarm keep only small in-memory timer state
+  and prevent auto-sleep while active.
+- 2026-08-13: Fixed PaperS3 UI regressions after the app/weather expansion: footer buttons are drawn 6 px above the physical
+  bottom edge, Home uses a local 34 px icon+label menu so Settings no longer overlaps the On This Day panel, and the app
+  grid content starts farther below the title.
+- 2026-08-13: Replaced Weather's English-only keyboard location entry with a touch list selector. The current firmware ships
+  a small common-city table to avoid Flash bloat; Add now chooses province then city/county, and Remove opens a multi-select
+  delete mode backed by a 16-bit mask for the 10 saved-location limit.
